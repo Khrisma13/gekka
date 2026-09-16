@@ -1,0 +1,35 @@
+# 依赖与构建产物
+node_modules/
+dist/
+.astro/
+
+# 字体包缓存（43MB 的 MiSans 压缩包与分片源文件）
+# 下载下来的产物已落到 public/fonts/misans/，那部分要提交，缓存不用
+.cache/
+
+# 离线样张：由脚本生成，给非开发者本地翻看用，线上用不到。
+#   npm run preview:album  -> design/preview/*.html
+#   npm run styleguide     -> design/styleguide.html
+# design/ 里的 favicon.svg 与 og-card.html 是「输入」（后者是 npm run og 的模板），不在忽略之列。
+design/preview/
+design/styleguide.html
+
+# 本地工作目录：截图、临时文件、记忆。不进仓库
+.workbuddy/
+
+# 一次性的试验目录（.tmp-oc/、.tmp-covers-test/ 之类），验证完就删
+.tmp-*/
+
+# 构建与预览日志
+.build.log
+.preview.log
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# 环境变量
+.env
+.env.local

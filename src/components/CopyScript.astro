@@ -1,0 +1,82 @@
+---
+/**
+ * 复制按钮的接线 —— **只输出一段脚本，没有任何标记**。
+ *
+ * 页面上凡是带 `data-copy` 的按钮（由 `LinkCard` 渲染）都归它管：点击后把
+ * `data-copy` 的值写进剪贴板，按钮文案临时变成「已复制」。
+ * 拿不到剪贴板权限时（非 https、`file://`、浏览器拒绝）**退化成「选中那串号码」**
+ * 并提示「请手动复制」—— 一个按了没反应的按钮比没有按钮更糟。
+ *
+ * 为什么单独做成一个组件，而不是放进 `LinkCard` 自己：
+ *   `LinkCard` 里只能写 `is:inline`（理由见下），而 `is:inline` 是**用几次渲染几份**，
+ *   组件里带上它就等于同一段监听注册 N 遍。放页面里则会被复制到每个用到的页面。
+ *   抽出来之后：用到的页面在末尾挂一次 `<CopyScript />` 即可。
+ *
+ * ⚠ 三件事别做：
+ *   1. 别把它从 `is:inline` 改成普通脚本 —— 普通脚本会被 Astro 打包成
+ *      `type="module"` 的外链文件，而模块脚本在 `file://` 下会被 CORS 拦掉，
+ *      离线预览里的复制按钮就静默失灵了（`design/preview/*.html` 靠这段脚本工作）。
+ *   2. 同一个页面里别放两次。脚本自带了幂等哨兵，重复也只在第一次真正注册，
+ *      但没必要在产物里多带一份源码。
+ *   3. **注释里别写 HTML 标签的字面量**（尖括号 + 标签名，开闭都算）。两种坏法：
+ *      开标签会被 Vite 的依赖扫描当成「脚本开始」—— 所有 .astro 都作为入口被整体切一遍，
+ *      从那里到文件末尾的注释被拿去当 JS 解析，冷启动 `npm run dev` 直接报 PARSE_ERROR
+ *      （TrackList.astro 犯过同一个错）；闭标签则会把这段脚本当场切断。
+ *      要指代它们，用「普通脚本」「页面末尾」这样的说法。
+ */
+---
+<script is:inline>
+  (function () {
+    // 幂等哨兵：万一被挂了两份，也只在第一次真正注册。
+    // ⚠ 这段脚本必须排在按钮**之后**（放在页面最末尾），首轮就能拿到全部按钮。
+    //   另外：注释里不要出现任何 HTML 标签的字面量（尖括号 + 标签名，开标签闭标签都算）。
+    //   开标签会被 Vite 的依赖扫描当成脚本起点；闭标签会直接把这段脚本切断。
+    if (window.__gekkaCopyBound) return;
+    window.__gekkaCopyBound = true;
+
+    var buttons = document.querySelectorAll('[data-copy]');
+    if (!buttons.length) return;
+
+    function selectText(el) {
+      if (!el || !document.createRange) return;
+      var range = document.createRange();
+      range.selectNodeContents(el);
+      var selection = window.getSelection();
+      if (!selection) return;
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    buttons.forEach(function (button) {
+      button.addEventListener('click', function () {
+        var value = button.getAttribute('data-copy') || '';
+        var card = button.closest ? button.closest('.link-card') : null;
+        var handle = card ? card.querySelector('.link-card__handle') : null;
+
+        function done(label) {
+          button.textContent = label;
+          button.classList.add('is-done');
+          window.setTimeout(function () {
+            button.textContent = '复制';
+            button.classList.remove('is-done');
+          }, 1600);
+        }
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(value).then(
+            function () {
+              done('已复制');
+            },
+            function () {
+              selectText(handle);
+              done('请手动复制');
+            },
+          );
+        } else {
+          selectText(handle);
+          done('请手动复制');
+        }
+      });
+    });
+  })();
+</script>

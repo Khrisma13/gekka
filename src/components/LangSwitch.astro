@@ -1,0 +1,59 @@
+---
+import { LOCALE_SHORT, type Locale } from '../config/site';
+
+interface Props {
+  current?: Locale;
+  /** 语言切换后应跳转到的本站对应页面；暂时统一回首页 */
+  target?: string;
+}
+
+const { current = 'zh' } = Astro.props;
+const locales: Locale[] = ['zh', 'ja', 'en'];
+---
+
+<div class="lang">
+  {
+    locales.map((loc, i) => (
+      <>
+        {i > 0 && <span class="lang__sep" aria-hidden="true">/</span>}
+        <a
+          class:list={['lang__item', { 'is-current': loc === current }]}
+          href={loc === 'zh' ? '/' : `/${loc}/`}
+          hreflang={loc}
+          aria-current={loc === current ? 'true' : undefined}
+        >
+          {LOCALE_SHORT[loc]}
+        </a>
+      </>
+    ))
+  }
+</div>
+
+<style>
+  .lang {
+    display: flex;
+    align-items: center;
+    gap: var(--s-2);
+    font-size: var(--text-meta);
+    letter-spacing: var(--ls-wide);
+    font-weight: var(--w-medium);
+  }
+
+  .lang__item {
+    color: var(--ink-400);
+    transition: color var(--dur-fast) var(--ease);
+  }
+
+  .lang__item:hover {
+    color: var(--ink-900);
+  }
+
+  /* 当前语言用墨色实心表示，不加下划线 */
+  .lang__item.is-current {
+    color: var(--ink-900);
+  }
+
+  .lang__sep {
+    color: var(--ink-300);
+  }
+</style>

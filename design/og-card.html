@@ -1,0 +1,111 @@
+<!doctype html>
+<!--
+  默认社交分享卡（1200×630）的源文件。
+
+  为什么用 HTML + 无头浏览器渲染，而不是画图：
+    字体是 MiSans、要和站点完全一致。用 Canvas / 图形库写一遍排版，
+    字重与字距必然对不上，改天换字体还得改两处。
+    这里直接复用站点的字体与令牌，改文案例子也在一个文件里。
+
+  生成：npm run og（先在 public/brand/ 下备好徽记：npm run brand）
+-->
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <!-- 相对路径，这样 file:// 下也能加载本地字体（根绝对路径会解析失败） -->
+  <link rel="stylesheet" href="../public/fonts/misans/MiSans.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      width: 1200px;
+      height: 630px;
+      overflow: hidden;
+      background: #FAFBFC;
+      color: #0B0E12;
+      font-family: 'MiSans', 'Microsoft YaHei', sans-serif;
+      font-weight: 400;
+      display: grid;
+      grid-template-rows: 1fr auto;
+      padding: 76px 84px 64px;
+      position: relative;
+    }
+
+    /* 右上角的社团徽记，压淡当水印用。
+       徽记本身比高略宽，所以只给高度不给宽度，避免拉变形。 */
+    .mark {
+      position: absolute;
+      top: 62px;
+      right: 84px;
+      height: 104px;
+      width: auto;
+      opacity: 0.13;
+    }
+
+    .main {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 22px;
+    }
+
+    .eyebrow {
+      font-size: 17px;
+      font-weight: 500;
+      letter-spacing: 0.30em;
+      text-transform: uppercase;
+      color: #8B939C;
+    }
+
+    .name {
+      font-size: 104px;
+      font-weight: 300;
+      letter-spacing: 0.14em;
+      line-height: 1.1;
+      indent: 0;
+    }
+
+    .tagline {
+      font-size: 30px;
+      font-weight: 300;
+      letter-spacing: 0.06em;
+      color: #4A525B;
+    }
+
+    .foot {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      border-top: 1px solid #E3E7EA;
+      padding-top: 24px;
+      font-size: 19px;
+      letter-spacing: 0.10em;
+      color: #8B939C;
+    }
+
+    .foot .dot {
+      display: inline-block;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #3F6E8F;
+      vertical-align: middle;
+      margin-right: 12px;
+    }
+  </style>
+</head>
+<body>
+  <img class="mark" src="../public/brand/logo-mark.png" alt="" aria-hidden="true" />
+
+  <div class="main">
+    <p class="eyebrow">Doujin music circle</p>
+    <h1 class="name">月華社</h1>
+    <p class="tagline">于虚实交融的缥缈中，探索音乐的更多可能性。</p>
+  </div>
+
+  <div class="foot">
+    <span><span class="dot"></span>GEKKA SOUND</span>
+    <span>gekka.saiba.moe</span>
+  </div>
+</body>
+</html>

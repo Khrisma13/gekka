@@ -1,0 +1,127 @@
+---
+/**
+ * 社团动态 · /news
+ *
+ * REQUIREMENTS §2.5：时间线列表，按年月分组，单条 = 日期 + 标签 + 正文 + 可选配图，
+ * 标签可筛选。边界：**动态 = 短讯（一两句），杂谈 = 长文**。
+ *
+ * 内容来自集合 `news`（一条动态 = src/content/news/*.md）。
+ * 标签筛选用一小段内联脚本做，无框架、无请求：全部条目本来就在 HTML 里，
+ * 没有 JS 时最差也只是「筛选不生效，内容全在」。
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Timeline from '../../components/Timeline.astro';
+import { SITE } from '../../config/site';
+import { getNews, tagsOf } from '../../lib/news';
+
+const news = await getNews();
+const tags = tagsOf(news);
+
+// 只有一个标签时筛选没有意义，直接不显示 —— 免得用户点了半天发现毫无变化，
+// 反而怀疑功能坏了（与专辑列表页同一处理）
+const hasFilters = tags.length > 1;
+---
+
+<BaseLayout
+  title="动态"
+  description={`${SITE.name} 的社团动态：新作发布、参展情报、成员招募与公告。`}
+>
+  <section class="container section">
+    <div class="section-head">
+      <h1 class="section-head__title">动态</h1>
+      <p class="section-head__note">{news.length} 条</p>
+    </div>
+
+    {
+      <div class="filters" id="news-filters" hidden={!hasFilters}>
+        <div class="filters__group">
+          <p class="eyebrow">标签</p>
+          <div class="filters__chips" role="group" aria-label="按标签筛选">
+            <button
+              class="chip is-active"
+              type="button"
+              data-tag="all"
+              aria-pressed="true"
+            >
+              全部
+            </button>
+            {tags.map((t) => (
+              <button class="chip" type="button" data-tag={t} aria-pressed="false">
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    }
+
+    <div id="news-timeline">
+      <Timeline entries={news} />
+    </div>
+
+    <p class="empty" id="news-empty" hidden>没有这个标签的动态。</p>
+
+    {
+      news.length === 0 && (
+        <p class="empty">
+          动态还没接入。在 <code>src/content/news/</code> 里放一个 <code>.md</code> 即可，
+          也可以跑 <code>npm run new:news</code> 生成骨架。
+        </p>
+      )
+    }
+  </section>
+</BaseLayout>
+
+<script is:inline>
+  (function () {
+    var timeline = document.getElementById('news-timeline');
+    var filters = document.getElementById('news-filters');
+    var empty = document.getElementById('news-empty');
+    if (!timeline || !filters || !empty) return;
+
+    var items = Array.prototype.slice.call(timeline.querySelectorAll('.tl__item'));
+    var groups = Array.prototype.slice.call(timeline.querySelectorAll('.tl__group'));
+    var state = { tag: 'all' };
+
+    function apply() {
+      var shown = 0;
+
+      items.forEach(function (item) {
+        var ok = state.tag === 'all' || item.dataset.tag === state.tag;
+        // hidden 打在条目与月份组自己身上，CSS 里配 display:none ——
+        // 被收掉的内容整个退出布局，后面的条目自动往前补
+        item.hidden = !ok;
+        if (ok) shown += 1;
+      });
+
+      // 一条都不剩的月份组整组收起：否则会留下一串空的「2026.09」标题
+      groups.forEach(function (group) {
+        group.hidden = group.querySelectorAll('.tl__item:not([hidden])').length === 0;
+      });
+
+      // 没有结果的提示，避免用户面对一片空白
+      empty.hidden = shown > 0;
+    }
+
+    filters.addEventListener('click', function (event) {
+      var btn = event.target.closest('.chip');
+      if (!btn) return;
+
+      state.tag = btn.dataset.tag;
+
+      // 同组内只允许一个激活
+      filters.querySelectorAll('.chip').forEach(function (el) {
+        var active = el === btn;
+        el.classList.toggle('is-active', active);
+        el.setAttribute('aria-pressed', String(active));
+      });
+
+      apply();
+    });
+  })();
+</script>
+
+<style>
+  /* 筛选条（.filters / .chip）、空状态（.empty）与正文排版（.prose）
+     都在 styles/global.css —— 别在这里再写一份。 */
+</style>

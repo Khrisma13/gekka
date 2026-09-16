@@ -1,0 +1,260 @@
+---
+import BaseHead from '../components/BaseHead.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import { DEFAULT_LOCALE, type Locale } from '../config/site';
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description?: string;
+  locale?: Locale;
+  /** 页面类型，影响 OG 卡片表现 */
+  ogType?: 'website' | 'article' | 'music.album';
+  /** 社交分享卡图片，缺省用站点默认图 */
+  ogImage?: string;
+  /** 样张页等不需要页脚的情况 */
+  bare?: boolean;
+  /** 开发中页面，不进搜索引擎 */
+  noindex?: boolean;
+  /**
+   * 本次是否允许播首页的进场遮罩。这里只负责把它转交下去 ——
+   * 判断必须发生在首帧之前，所以真正的门禁在 BaseHead 里（见那段脚本）。
+   */
+  intro?: boolean;
+}
+
+const {
+  title,
+  description,
+  locale = DEFAULT_LOCALE,
+  ogType = 'website',
+  ogImage,
+  bare = false,
+  noindex = false,
+  intro = false,
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang={locale}>
+  <head>
+    <BaseHead
+      title={title}
+      description={description}
+      locale={locale}
+      type={ogType}
+      image={ogImage}
+      noindex={noindex}
+      intro={intro}
+    />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">跳到主要内容</a>
+    <SiteHeader locale={locale} />
+    <main id="main">
+      <slot />
+    </main>
+    {!bare && <SiteFooter locale={locale} />}
+
+    <!-- 页面级覆盖层的落点：在页脚之后、页面切换幕布之前。
+         目前只有首页的进场遮罩（components/Intro.astro）挂在这里。 -->
+    <slot name="overlay" />
+
+    <!-- 页面切换的幕布。样式在 styles/global.css 的「页面切换过渡」一节（含入场那半场），
+         这里只放元素与出场脚本 —— 全站共用一份，别在各个页面里再写。 -->
+    <div class="page-fade" aria-hidden="true"></div>
+
+    <script is:inline>
+      /**
+       * 页面切换的**出场**半场（入场在 styles/global.css 的 page-enter 动画里）。
+       *
+       * 点站内链接时先把一块纸色幕布淡入，再跳转：新页面加载出来时本来就是纸色底
+       * （html 的 background），内容再淡进来 —— 两半接得上，观感是一次完整的过渡，
+       * 而不是「啪」一下换页。
+       *
+       * **只接管站内的页面跳转**，其余一律不拦：
+       *   · 外链 / mailto —— 拦了也没用，别人的页面不会配合淡入，幕布只会白白盖住我们自己；
+       *   · 同页锚点 —— 那是页内滚动，拉一次幕布反而像卡了一下；
+       *   · 修饰键 / 中键 / target=_blank / download —— 用户要的是「另开一个」，不是「跳过去」。
+       *
+       * 出场时长从令牌 `--dur-fast` 现读，样式与脚本不各写一个数字（同
+       * lib/tracks.ts 把括号文案收敛到一处那条思路）。「减少动态效果」时整段不生效。
+       */
+      (function () {
+        var root = document.documentElement;
+        var veil = document.querySelector('.page-fade');
+        if (!veil) return;
+        if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+        /**
+         * ⚠ **别写成 parseFloat(...) || 180**：自定义属性取回来的是「写出来的那个字符串」，
+         * 构建时的压缩器会把 180ms 压成 .18s，parseFloat('.18s') 得到 0.18 —— 当成毫秒用就
+         * 差了一千倍：幕布刚点亮就跳走，这半场等于没跑（这个 bug 在产物里真的发生过，dev 下
+         * 完全看不出来）。按单位算。
+         *
+         * 同一段 helper 在 components/Intro.astro 里也有一份：两个 is:inline 脚本没法共用模块
+         * （打包成 module 会在 file:// 下被 CORS 拦，见 DESIGN §24），只能各留一份。
+         * **改一处记得改另一处。**
+         */
+        function msOf(name, fallback) {
+          var v = getComputedStyle(root).getPropertyValue(name).trim();
+          var n = parseFloat(v);
+          if (!isFinite(n)) return fallback;
+          return v.indexOf('ms') > -1 ? n : n * 1000;
+        }
+
+        var OUT_MS = msOf('--dur-fast', 180);
+        var leaving = false;
+
+        document.addEventListener('click', function (event) {
+          if (leaving || event.defaultPrevented) return;
+          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+            return;
+          }
+
+          var link = event.target.closest ? event.target.closest('a') : null;
+          if (!link) return;
+          if (link.target && link.target !== '_self') return;
+          if (link.hasAttribute('download')) return;
+
+          var url;
+          try {
+            url = new URL(link.href, location.href);
+          } catch (err) {
+            return;
+          }
+          if (url.origin !== location.origin) return;
+          // 同一个页面（只有锚点或查询串不同）不算跳转
+          if (url.pathname === location.pathname && url.search === location.search) return;
+
+          event.preventDefault();
+          leaving = true;
+          root.dataset.pt = 'out';
+
+          // 兜底：万一定位没走成（跳转被拦、目标被删、链接是个空壳），把幕布收回去 ——
+          // 否则整页被一块纸色永久盖住，而且没有任何出口。
+          setTimeout(function () {
+            delete root.dataset.pt;
+            leaving = false;
+          }, OUT_MS + 1200);
+
+          setTimeout(function () {
+            location.href = link.href;
+          }, OUT_MS);
+        });
+
+        /**
+         * 后退回到这一页时，页面是**原样恢复**的（bfcache）—— 上面这段脚本不会再跑一遍，
+         * 于是「点了链接、又按了后退」的那一次会停在盖着幕布的状态里：整页空白。
+         * 这里把幕布收回（`data-pt` 一撤，transition 就把它淡掉了）。
+         */
+        addEventListener('pageshow', function (event) {
+          if (!event.persisted) return;
+          delete root.dataset.pt;
+          leaving = false;
+        });
+      })();
+    </script>
+
+    <script is:inline>
+      (function () {
+        var els = document.querySelectorAll('.reveal');
+        if (!els.length) return;
+
+        if (!('IntersectionObserver' in window)) {
+          els.forEach(function (el) {
+            el.classList.add('is-visible');
+          });
+          return;
+        }
+
+        var io = new IntersectionObserver(
+          function (entries) {
+            entries.forEach(function (entry) {
+              if (entry.isIntersecting) {
+                entry.target.classList.add('is-visible');
+                io.unobserve(entry.target);
+              }
+            });
+          },
+          { rootMargin: '0px 0px -8% 0px', threshold: 0.05 }
+        );
+
+        els.forEach(function (el) {
+          io.observe(el);
+        });
+      })();
+    </script>
+
+    <script is:inline>
+      /**
+       * 溢出文字的悬停滚动（机制与样式见 styles/clip.css）。
+       *
+       * 只给「文字确实比格子长」的元素打 data-overflow 并写入滚动距离与时长 ——
+       * 不溢出的保持静止，避免满屏文字乱滚干扰阅读。
+       *
+       * 挂在 BaseLayout 而不是各个组件里：同一个页面上可能同时有曲目表与曲目库索引，
+       * 各挂一份会重复测量、重复绑 resize。这里一页只跑一次。
+       */
+      (function () {
+        var boxes = document.querySelectorAll('.clip');
+        if (!boxes.length) return;
+
+        function measure() {
+          boxes.forEach(function (box) {
+            // 窄屏下这些格子已改成换行不裁切，测量没有意义，也不该留着渐隐遮罩
+            if (getComputedStyle(box).whiteSpace !== 'nowrap') {
+              delete box.dataset.overflow;
+              return;
+            }
+
+            var dist = box.scrollWidth - box.clientWidth;
+            if (dist > 0) {
+              box.dataset.overflow = 'true';
+              box.style.setProperty('--scroll-dist', dist + 'px');
+              // 往返一次 ≈ dist/15 秒（约 30px/s），下限 3s、上限 12s
+              box.style.setProperty('--scroll-dur', Math.min(12, Math.max(3, dist / 15)) + 's');
+            } else {
+              delete box.dataset.overflow;
+            }
+          });
+        }
+
+        // 尺寸变化会改变裁切宽度（也可能跨过断点），必须重测。
+        // 「减少动态效果」只是不让它滚（动画在 clip.css 里关掉），遮罩与测量照常 ——
+        // 遮罩配合 title 属性才是那种情况下看全文的途径。
+        var raf = 0;
+        window.addEventListener('resize', function () {
+          cancelAnimationFrame(raf);
+          raf = requestAnimationFrame(measure);
+        });
+
+        measure();
+        // 字体加载完成后重测：MiSans 到位后字形宽度会变，溢出量可能跟着变
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure);
+      })();
+    </script>
+  </body>
+</html>
+
+<style>
+  /* 首屏可达性：键盘用户第一个 Tab 就能跳过导航 */
+  .skip-link {
+    position: absolute;
+    top: -100px;
+    left: var(--s-4);
+    z-index: 100;
+    padding: var(--s-3) var(--s-4);
+    background: var(--ink-900);
+    color: var(--paper-0);
+    font-size: var(--text-sm);
+    border-radius: var(--r-md);
+    transition: top var(--dur) var(--ease);
+  }
+
+  .skip-link:focus {
+    top: var(--s-4);
+    color: var(--paper-0);
+  }
+</style>

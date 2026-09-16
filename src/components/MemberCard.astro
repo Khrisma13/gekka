@@ -1,0 +1,162 @@
+---
+/**
+ * 成员卡片。
+ *
+ * 状态只有一个来源：`member.status`（正式 / 合作 / 退出，见 lib/types.ts 的
+ * `MEMBER_STATUS`）—— 早前的 `left` / `guest` 两个布尔已删掉，
+ * 那种写法允许「既退出、又是合作」这种没有意义的状态存在。
+ *
+ * 标记文案取自 `MEMBER_GROUP_LABEL`，与 /about 上分组标题**同一份**：
+ * 同一件事在两个地方各写一遍，改一处必漏一处。
+ *
+ * 头像：`member.avatar` 是 **public/ 下的路径**（如 `/images/members/khrisma.webp`），
+ * 由 `asset()` 拼上部署前缀 —— 所以别带 `public/`、更别写完整网址。
+ * 图会被圆形裁切（`object-fit: cover` + `border-radius: 50%`），请给正方形图。
+ */
+import { asset } from '../config/site';
+import { MEMBER_GROUP_LABEL, type MemberData } from '../lib/members';
+
+interface Props {
+  member: MemberData;
+}
+
+const { member } = Astro.props;
+
+// 正式成员不挂标记：多数派不需要被标出来，挂上去反而像在暗示「别人不算成员」。
+// 合作与退出才是需要被看见的例外。
+const status = member.status === '正式' ? null : MEMBER_GROUP_LABEL[member.status];
+
+// 退出：整张卡降一档饱和度与对比（见下方 .is-out）
+const isOut = member.status === '退出';
+---
+
+<article class:list={['member', { 'is-out': isOut }]}>
+  <div class="member__avatar">
+    {
+      member.avatar ? (
+        <img
+          src={asset(member.avatar)}
+          alt={`${member.name} 头像`}
+          width="160"
+          height="160"
+          loading="lazy"
+          decoding="async"
+        />
+      ) : (
+        <span class="placeholder member__placeholder" aria-hidden="true" />
+      )
+    }
+  </div>
+
+  <div class="member__body">
+    <h3 class="member__name">
+      {member.name}
+      {status && <span class="member__status">{status}</span>}
+    </h3>
+    <p class="member__role">{member.role}</p>
+    {member.bio && <p class="member__bio">{member.bio}</p>}
+
+    {
+      member.links.length > 0 && (
+        <ul class="member__links">
+          {member.links.map((link) => (
+            <li>
+              <a class="link-underline" href={link.href} target="_blank" rel="noopener noreferrer">
+                {link.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      )
+    }
+  </div>
+</article>
+
+<style>
+  .member {
+    display: grid;
+    grid-template-columns: 88px minmax(0, 1fr);
+    gap: var(--s-5);
+    align-items: start;
+  }
+
+  .member__avatar {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    border-radius: var(--r-full);
+    overflow: hidden;
+    background: var(--paper-100);
+    border: 1px solid var(--line-1);
+  }
+
+  .member__avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .member__placeholder {
+    position: absolute;
+    inset: 0;
+    border: none;
+  }
+
+  /* 退出：图像降饱和，文字退到次要灰 —— 还能读，但不再抢注意力 */
+  .member.is-out .member__avatar {
+    opacity: 0.55;
+  }
+
+  .member.is-out .member__body {
+    color: var(--ink-400);
+  }
+
+  .member__name {
+    font-size: var(--text-h3);
+    font-weight: var(--w-regular);
+    color: var(--ink-900);
+    display: flex;
+    align-items: baseline;
+    gap: var(--s-3);
+    flex-wrap: wrap;
+  }
+
+  .is-out .member__name {
+    color: var(--ink-500);
+  }
+
+  .member__status {
+    font-size: var(--text-meta);
+    letter-spacing: var(--ls-wide-sm);
+    color: var(--ink-400);
+    border: 1px solid var(--line-1);
+    border-radius: var(--r-full);
+    padding: 1px 8px;
+    font-weight: var(--w-regular);
+  }
+
+  .member__role {
+    margin-top: var(--s-2);
+    font-size: var(--text-sm);
+    color: var(--accent);
+    letter-spacing: var(--ls-wide-sm);
+  }
+
+  .is-out .member__role {
+    color: var(--ink-400);
+  }
+
+  .member__bio {
+    margin-top: var(--s-3);
+    font-size: var(--text-sm);
+    color: var(--ink-500);
+    line-height: var(--lh-tight);
+  }
+
+  .member__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-4);
+    margin-top: var(--s-4);
+    font-size: var(--text-sm);
+  }
+</style>

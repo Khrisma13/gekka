@@ -1,0 +1,554 @@
+---
+/**
+ * 曲目库 · /tracks
+ *
+ * REQUIREMENTS §2.3：全社团所有曲目的可检索索引表。
+ *
+ * 与专辑页曲目表的分工：
+ *   · 专辑页那张回答「这一张里有什么」—— 有序号、时长、行内署名；
+ *   · 这张回答跨专辑的问题 ——「这首原曲我们编过几次」「谁编过这首」
+ *     「这首歌收在哪张盘里」，所以多出「收录专辑」一列，并按专辑分组排序。
+ *
+ * 与需求草案不同的取舍，理由写在 DESIGN.md §17：
+ *   · 原曲与出处合成一列（与专辑页同一套写法），而不是各占一列 ——
+ *     七列在 1120px 里排下来，最该宽的曲名反而被压窄；
+ *   · 「演唱」列已删（127 首里只有 2 首有值，整列空着不好看），
+ *     「试听」列也已删（专辑页头部那颗主按钮就是它，而「收录专辑」一列
+ *     现在直接通向同一张专辑 —— 一行为同一个去处再放一列图标只是噪声）；
+ *   · 索引表不挂滚动淡入 —— 一百多行逐行淡入只会让人等它；
+ *   · 行首编号是**当前列表的顺序号**（1..N），不是专辑内的曲序 ——
+ *     它随筛选重排，见页尾脚本。专辑内的曲序只在专辑页那张表里有意义。
+ *   · 两处计数（顶部摘要与表格上方那颗）都带「（含 N 首重复乐曲）」——
+ *     同一首曲子被多张盘收录时把多出来的那份点出来，免得「127 曲」被当成
+ *     127 首互不相同的曲子。判定口径写在 lib/tracks.ts 的 duplicateCountOf()，
+ *     括号文案的真源是同文件的 dupNoteOf()（客户端脚本也从服务端带下来的
+ *     属性里读，不自己拼串）。
+ *
+ * 筛选：搜索框（曲名 / 原曲 / 编曲 / 专辑）＋ 系列・类型・出处作品・编曲者
+ * 四个下拉。全部在客户端做，页面里本来就有全部行 ——
+ * 没有 JS 时最差也只是「筛选不工作，内容全在」。
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { SITE } from '../../config/site';
+import { getAlbums, seriesListOf, SERIES_LABELS, typesOf } from '../../lib/albums';
+import {
+  creditsOf,
+  duplicateCountOf,
+  dupNoteOf,
+  indexTracks,
+  originOf,
+  summaryOf,
+  worksOf,
+} from '../../lib/tracks';
+
+const albums = await getAlbums();
+const rows = indexTracks(albums);
+/** 重复收录多出来的条目数 —— 附在总数后面，免得「127 曲」被当成 127 首不同的曲子 */
+const dups = duplicateCountOf(rows);
+/** 括号文案（含量词）—— 顶部摘要与表格上方那颗计数共用；客户端脚本读的也是这一份 */
+const dupNote = dupNoteOf(dups);
+
+const series = seriesListOf(albums);
+const types = typesOf(albums);
+const works = worksOf(rows);
+const credits = creditsOf(rows);
+const summary = summaryOf(rows, dupNote);
+---
+
+<BaseLayout
+  title="曲目库"
+  description={`${SITE.name} 全部专辑的曲目索引 —— 共 ${summary}，可按曲名、原曲、出处作品、编曲者与类型检索。`}
+>
+  <section class="container section">
+    <div class="section-head">
+      <h1 class="section-head__title">曲目库</h1>
+      <p class="section-head__note">{summary}</p>
+    </div>
+
+    <!-- ================= 筛选 ================= -->
+    <div class="filters" id="track-filters" hidden={!rows.length}>
+      <div class="filters__search">
+        <label class="eyebrow" for="track-q">搜索</label>
+        <input
+          class="input"
+          id="track-q"
+          type="search"
+          placeholder="曲名 / 原曲 / 编曲 / 专辑"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </div>
+
+      {
+        series.length > 1 && (
+          <div class="filters__group">
+            <label class="eyebrow" for="track-series">系列</label>
+            <select class="select" id="track-series" data-filter="series">
+              <option value="all">全部系列</option>
+              {series.map((s) => <option value={s}>{SERIES_LABELS[s]}</option>)}
+            </select>
+          </div>
+        )
+      }
+
+      {
+        types.length > 1 && (
+          <div class="filters__group">
+            <label class="eyebrow" for="track-type">类型</label>
+            <select class="select" id="track-type" data-filter="type">
+              <option value="all">全部类型</option>
+              {types.map((t) => <option value={t}>{t}</option>)}
+            </select>
+          </div>
+        )
+      }
+
+      {
+        works.length > 1 && (
+          <div class="filters__group">
+            <label class="eyebrow" for="track-source">出处作品</label>
+            <select class="select" id="track-source" data-filter="source">
+              <option value="all">全部作品</option>
+              {works.map((w) => <option value={w}>{w}</option>)}
+            </select>
+          </div>
+        )
+      }
+
+      {
+        credits.length > 1 && (
+          <div class="filters__group">
+            <label class="eyebrow" for="track-credit">编曲 / 作曲</label>
+            <select class="select" id="track-credit" data-filter="credit">
+              <option value="all">全部</option>
+              {credits.map((c) => <option value={c}>{c}</option>)}
+            </select>
+          </div>
+        )
+      }
+    </div>
+
+    <div class="toolbar">
+      {/* 重复数与括号文案都由服务端算好、随元素带下去，两者分工不同：
+          · data-dup 是数字本身 —— 供校验/探针比对，不作为文案来源；
+          · data-dup-note 是整串文案 —— 客户端脚本直接贴，不自己拼（它读不到 TS 模块）。
+          口径只写在 lib/tracks.ts 的 duplicateCountOf()、文案只写在 dupNoteOf()，
+          这个页面里没有第二处。title 补一句解释，省得读者猜「8」是怎么来的。 */}
+      <p
+        class="toolbar__count"
+        id="track-count"
+        aria-live="polite"
+        data-dup={dups}
+        data-dup-note={dupNote || undefined}
+        title={dups > 0
+          ? `其中 ${dups} 首在多张专辑里重复收录（曲名、作者、原曲、分类四项一致的才算）`
+          : undefined}
+      >共 {rows.length} 曲{dupNote}</p>
+      <button class="toolbar__reset" id="track-reset" type="button" hidden>清除筛选</button>
+    </div>
+
+    <!-- ================= 索引表 ================= -->
+    {
+      rows.length > 0 ? (
+        <div class="index" id="track-index">
+          {/* 视觉用的列头。索引表本身是列表（每行是 li），列的意义靠行内标签与
+              这里的文字共同传达；对读屏用户隐藏，免得念一通行头却与下面的列表对不上 */}
+          <div class="index__head" aria-hidden="true">
+            <span>#</span>
+            <span>曲目</span>
+            <span>编曲 / 作曲</span>
+            <span>收录专辑</span>
+          </div>
+
+          <ol class="index__list">
+            {rows.map((r, i) => (
+              <li
+                class="index__row"
+                data-series={r.album.series}
+                data-type={r.album.type}
+                data-source={r.works.join('|')}
+                data-credit={r.credit ?? ''}
+                data-search={r.search}
+              >
+                {/* 首屏由服务端按列表顺序给出 1..N；筛选时脚本重排同一套编号 */}
+                <span class="index__no mono-num">{String(i + 1).padStart(2, '0')}</span>
+
+                <span class="index__main">
+                  <span class="index__title-line">
+                    <a class="index__title clip" href={r.href} title={r.title}>
+                      <span class="clip-inner">{r.title}</span>
+                    </a>
+                    {r.note && <span class="index__note">{r.note}</span>}
+                  </span>
+                  {originOf(r) && (
+                    <span class="index__origin clip" title={originOf(r)}>
+                      <span class="clip-inner">{originOf(r)}</span>
+                    </span>
+                  )}
+                </span>
+
+                <span
+                  class:list={['index__credit', 'clip', { 'is-blank': !r.credit }]}
+                  title={r.credit ? `${r.creditRole} ${r.credit}` : undefined}
+                >
+                  {r.credit && (
+                    <span class="clip-inner">
+                      <span class="index__credit-role">{r.creditRole}</span>{r.credit}
+                    </span>
+                  )}
+                </span>
+
+                <span class="index__album">
+                  <span class="index__catalog mono-num">{r.album.catalog}</span>
+                  <a class="index__album-title clip" href={r.albumHref} title={r.album.title}>
+                    <span class="clip-inner">{r.album.title}</span>
+                  </a>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      ) : (
+        <p class="empty">
+          曲目数据还没接入。把专辑文件放进 <code>src/content/albums/</code> 即可，
+          也可以跑 <code>npm run fetch:album -- GKCD-010</code> 从 dizzylab 抓取。
+        </p>
+      )
+    }
+
+    <p class="empty" id="track-empty" hidden>没有符合条件的曲目。</p>
+  </section>
+</BaseLayout>
+
+<script is:inline>
+  (function () {
+    var index = document.getElementById('track-index');
+    var filters = document.getElementById('track-filters');
+    var q = document.getElementById('track-q');
+    var empty = document.getElementById('track-empty');
+    var count = document.getElementById('track-count');
+    var reset = document.getElementById('track-reset');
+    if (!index || !filters || !q || !empty || !count || !reset) return;
+
+    var rows = Array.prototype.slice.call(index.querySelectorAll('.index__row'));
+    var noCells = rows.map(function (row) {
+      return row.querySelector('.index__no');
+    });
+    var total = rows.length;
+    // 括号文案整串由服务端带下来，脚本不自己拼（量词只写在 lib/tracks.ts 的
+    // dupNoteOf() 一处）。没有重复时该属性不输出，这里退化为空串。
+    var dupNote = count.dataset.dupNote || '';
+    var state = { series: 'all', type: 'all', source: 'all', credit: 'all', q: '' };
+
+    /** 补零到两位，与服务端首屏那套写法一致 */
+    function pad(n) {
+      return n < 10 ? '0' + n : String(n);
+    }
+
+    function apply() {
+      var needle = state.q.trim().toLowerCase();
+      var shown = 0;
+
+      rows.forEach(function (row, i) {
+        var ok =
+          (state.series === 'all' || row.dataset.series === state.series) &&
+          (state.type === 'all' || row.dataset.type === state.type) &&
+          (state.credit === 'all' || row.dataset.credit === state.credit) &&
+          (state.source === 'all' ||
+            (row.dataset.source ? row.dataset.source.split('|').indexOf(state.source) !== -1 : false)) &&
+          (!needle || row.dataset.search.indexOf(needle) !== -1);
+
+        // hidden 打在 li 自己身上。li 就是列表项、就是版位，没有中间层可错位 ——
+        // 但 .index__row 的 display 优先级高于浏览器默认的 [hidden]，样式区里那条
+        // 显式规则不能删（教训见 DESIGN.md §13.4）
+        row.hidden = !ok;
+        if (!ok) return;
+
+        // 编号跟着「当前看得见的顺序」走，不跟着专辑内的曲序 ——
+        // 筛完就是一份 1..N 的连续清单，首屏与筛选后同一套规则
+        shown += 1;
+        noCells[i].textContent = pad(shown);
+      });
+
+      empty.hidden = shown > 0;
+      // 括号永远跟在「总数」后面：重复收录是整个曲目库的属性，不随筛选变 ——
+      // 筛选后那串「显示 39 / 127 曲」里的 127 仍是同一个总数
+      count.textContent =
+        (shown === total ? '共 ' + total + ' 曲' : '显示 ' + shown + ' / ' + total + ' 曲') + dupNote;
+
+      var active =
+        state.series !== 'all' || state.type !== 'all' || state.credit !== 'all' ||
+        state.source !== 'all' || needle !== '';
+      reset.hidden = !active;
+    }
+
+    // 四个筛选一律是下拉，共用一条 change 通道
+    filters.addEventListener('change', function (event) {
+      var sel = event.target.closest('select[data-filter]');
+      if (!sel) return;
+      state[sel.dataset.filter] = sel.value;
+      apply();
+    });
+
+    q.addEventListener('input', function () {
+      state.q = q.value;
+      apply();
+    });
+
+    reset.addEventListener('click', function () {
+      state = { series: 'all', type: 'all', source: 'all', credit: 'all', q: '' };
+      q.value = '';
+      filters.querySelectorAll('select[data-filter]').forEach(function (sel) {
+        sel.value = 'all';
+      });
+      apply();
+    });
+  })();
+</script>
+
+<style>
+  /* 搜索框（.input）、筛选条与芯片（.filters* / .chip）、结果计数与清除（.toolbar*）
+     都在 styles/global.css —— 站内搜索 /search 与这一页共用，别在这里再写一份。 */
+
+  /* --- 筛选控件 ----------------------------------------------------------- */
+
+  /* 四项筛选取值都不少（出处作品 21、编曲 26，条目还很长），
+     铺成芯片会把筛选区压成三四行，所以这里一律用下拉。 */
+  .select {
+    display: block;
+    max-width: 260px;
+    margin-top: var(--s-3);
+    padding: 7px 10px;
+    font-size: var(--text-sm);
+    color: var(--ink-700);
+    background: var(--paper-0);
+    border: 1px solid var(--line-1);
+    border-radius: var(--r-sm);
+    transition: border-color var(--dur-fast) var(--ease);
+  }
+
+  .select:hover {
+    border-color: var(--line-2);
+  }
+
+  .select:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  /* --- 索引表 -------------------------------------------------------------
+     用列表而不是 <table>：这张表窄屏要变成卡片式堆叠，而 <table> 的元素一旦
+     被 display:grid / block 接管，浏览器就会把它从无障碍树里当表格摘掉 ——
+     那还不如老老实实用 li，语义与视觉一致。列头只作视觉引导，行内自带标签。 */
+
+  .index__head,
+  .index__row {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) minmax(0, 132px) minmax(0, 200px);
+    gap: var(--s-4);
+    padding-inline: var(--s-4);
+    align-items: center;
+  }
+
+  /* 长表滚到中段时列头不离开视线。站点导航高 72px（≤900px 时 64px，
+     而那时这张表已改成堆叠、列头也收起了），贴住它即可。 */
+  .index__head {
+    position: sticky;
+    top: 72px;
+    z-index: 10;
+    background: var(--paper-50);
+    padding-block: var(--s-3);
+    font-size: var(--text-meta);
+    letter-spacing: var(--ls-wide-sm);
+    color: var(--ink-400);
+    border-bottom: 1px solid var(--line-2);
+  }
+
+  .index__list {
+    border-bottom: 1px solid var(--line-1);
+  }
+
+  .index__row {
+    padding-block: var(--s-4);
+    border-bottom: 1px solid var(--line-1);
+    transition: background-color var(--dur-fast) var(--ease);
+  }
+
+  .index__row:hover {
+    background: var(--paper-100);
+  }
+
+  /* ⚠️ 不能删。`.index__row { display: grid }` 是作者样式，优先级高于浏览器
+     默认的 `[hidden] { display: none }` —— 少这一条，筛选后行数对了但一行都不会消失。 */
+  .index__row[hidden] {
+    display: none;
+  }
+
+  /* 顺序号：跟着当前列表走，不是专辑内曲序。tabular-nums 让 01→100 宽度不跳 */
+  .index__no {
+    font-size: var(--text-sm);
+    color: var(--ink-300);
+  }
+
+  .index__main {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .index__title-line {
+    display: flex;
+    align-items: baseline;
+    gap: var(--s-3);
+    min-width: 0;
+  }
+
+  /* 一行里两个去同一张专辑的出口，但粒度不同 —— 曲名 → `#tracks`（直达那张盘的
+     曲目区），收录专辑 → 专辑页首页。不重复：按专辑扫过去、想整体看一张盘时，
+     点专辑名比回头点曲名顺手。两处都只挂一个链接，不在一格里叠第二层。 */
+  .index__title {
+    font-size: var(--text-body);
+    color: var(--ink-900);
+  }
+
+  .index__title:hover {
+    color: var(--accent);
+  }
+
+  .index__note {
+    flex-shrink: 0;
+    font-size: var(--text-meta);
+    letter-spacing: var(--ls-wide-sm);
+    color: var(--ink-400);
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-sm);
+    padding: 1px 6px;
+    line-height: 1.5;
+  }
+
+  .index__origin {
+    font-size: var(--text-meta);
+    color: var(--ink-400);
+    letter-spacing: var(--ls-wide-sm);
+  }
+
+  .index__credit {
+    font-size: var(--text-sm);
+    color: var(--ink-500);
+  }
+
+  /* 编曲还是作曲是实质区别（东方二创署名），标出来但压低对比 */
+  .index__credit-role {
+    color: var(--ink-300);
+    margin-right: 5px;
+  }
+
+  .index__album {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  /* 编号不许折行：窄屏下它是 flex 项，「GKCD-013」会被挤成两行 */
+  .index__catalog {
+    flex-shrink: 0;
+    white-space: nowrap;
+    font-size: var(--text-meta);
+    color: var(--ink-400);
+    letter-spacing: var(--ls-wide-sm);
+  }
+
+  /* 专辑名是链接（指向专辑页），但一格里两行都是文字，不再给下划线 ——
+     与曲名同一套处理：悬停才浮出强调色 */
+  .index__album-title {
+    font-size: var(--text-sm);
+    color: var(--ink-700);
+  }
+
+  .index__album-title:hover {
+    color: var(--accent);
+  }
+
+  /* --- 窄屏：列头收起，每行摊成卡片 ---------------------------------------- */
+
+  @media (max-width: 900px) {
+    .index__head {
+      display: none;
+    }
+
+    .index__row {
+      grid-template-columns: 28px minmax(0, 1fr);
+      gap: 4px var(--s-3);
+      /* 手机上横向空间紧，内边距与专辑页曲目表同档收一档 */
+      padding-block: var(--s-3);
+      padding-inline: var(--s-3);
+      align-items: start;
+    }
+
+    .index__no {
+      grid-column: 1 / 2;
+      grid-row: 1 / 2;
+    }
+
+    .index__main {
+      grid-column: 2 / 3;
+      grid-row: 1 / 2;
+    }
+
+    /* 其余两格依次落到曲名下面同一列里（不给显式行号，
+       让自动排布按顺序压紧 —— 空值被判为 is-blank 收掉后不会留空行） */
+    .index__credit,
+    .index__album {
+      grid-column: 2 / 3;
+    }
+
+    .index__credit {
+      display: flex;
+      gap: var(--s-2);
+      font-size: var(--text-meta);
+      color: var(--ink-400);
+    }
+
+    /* 列头没了，这一格靠自己带出标签。
+       空值用 is-blank 判（而不是 :empty）—— Astro 的输出里模板换行可能留下
+       文本节点，:empty 不一定成立，那个坑很隐蔽。 */
+    .index__album {
+      flex-direction: row;
+      align-items: baseline;
+      gap: var(--s-3);
+    }
+
+    .index__album::before {
+      content: '收录';
+      flex-shrink: 0;
+      font-size: var(--text-meta);
+      letter-spacing: var(--ls-wide-sm);
+      color: var(--ink-300);
+    }
+
+    .index__album-title {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .index__row .is-blank {
+      display: none;
+    }
+
+    /* 手机上这些格子改回换行不截断（与专辑页曲目表一致），
+       内层随之退化为行内文本 —— 测量脚本按 white-space 判定「无需滚动」，
+       渐隐遮罩也就自动不出现了。 */
+    .index__row .clip {
+      white-space: normal;
+      overflow: visible;
+    }
+
+    .index__row .clip-inner {
+      display: inline;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+  }
+</style>

@@ -1,0 +1,195 @@
+---
+/**
+ * 社团动态时间线。按「年.月」分组，组内按日期倒序。
+ *
+ * 数据来自内容集合 `news`（一条动态 = `src/content/news/*.md`），
+ * 正文用 `render()` 渲染 Markdown —— 所以这个组件是 async 的。
+ *
+ * 交互（标签筛选）由页面负责：页面按 `data-tag` 藏 li，并把「一条都不剩」的
+ * 月份组整组收掉。因此下面两条 `[hidden]` 规则必须留着 ——
+ * `.tl__item` 是 grid，作者样式优先级高于浏览器默认的 `[hidden]{display:none}`，
+ * 少了它们就是「筛选后行不消失」，而且是静默的。
+ */
+import { render, type CollectionEntry } from 'astro:content';
+import { asset } from '../config/site';
+import { groupKey } from '../lib/types';
+
+interface Props {
+  entries: CollectionEntry<'news'>[];
+}
+
+const { entries } = Astro.props;
+
+const sorted = [...entries].sort((a, b) => b.data.date.localeCompare(a.data.date));
+
+// 正文在这里一次性并发渲染好，模板里就不必再 await
+const items = await Promise.all(
+  sorted.map(async (entry) => ({
+    id: entry.id,
+    data: entry.data,
+    body: (await render(entry)).Content,
+  })),
+);
+
+const groups: { key: string; items: typeof items }[] = [];
+for (const item of items) {
+  const key = groupKey(item.data.date);
+  const last = groups[groups.length - 1];
+  if (last && last.key === key) last.items.push(item);
+  else groups.push({ key, items: [item] });
+}
+
+const dayOf = (iso: string) => iso.slice(8, 10);
+---
+
+<div class="tl">
+  {
+    groups.map((group) => (
+      <section class="tl__group">
+        <h3 class="tl__month mono-num">{group.key}</h3>
+
+        <ul class="tl__list">
+          {group.items.map((item) => {
+            // 动态组件必须先落到一个大写开头的局部变量上：`<item.body />`
+            // 会被编译器当成 HTML 标签（首字母小写）而不是组件
+            const Body = item.body;
+
+            // id 给站内搜索深链用（形如 /news 页的 #文件名）—— 没有它，
+            // 六条动态的搜索结果全都只能落到页首，等于搜不出来。
+            // 文件名即 URL 片段，与 src/content/news/ 下的文件名一致。
+            return (
+              <li class="tl__item" id={item.id} data-tag={item.data.tag}>
+                <time class="tl__day mono-num" datetime={item.data.date}>
+                  {dayOf(item.data.date)}
+                </time>
+
+                <div class="tl__body">
+                  <span class="tl__tag">{item.data.tag}</span>
+
+                  {/* 正文的排版在 styles/global.css 的 .prose 里 ——
+                      渲染出的 HTML 拿不到本组件的作用域标记 */}
+                  <div class="tl__text prose">
+                    <Body />
+                  </div>
+
+                  {item.data.image && (
+                    <img
+                      class="tl__image"
+                      src={asset(item.data.image)}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    ))
+  }
+</div>
+
+<style>
+  .tl__group + .tl__group {
+    margin-top: var(--s-8);
+  }
+
+  .tl__month {
+    font-size: var(--text-sm);
+    font-weight: var(--w-medium);
+    letter-spacing: var(--ls-wide);
+    color: var(--ink-500);
+    padding-bottom: var(--s-4);
+    border-bottom: 1px solid var(--line-1);
+  }
+
+  .tl__item {
+    display: grid;
+    /* 左列要装得下放大后的两位数字，不再按 13px 小字预留 */
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: var(--s-5);
+    padding-block: var(--s-5);
+    border-bottom: 1px solid var(--line-1);
+    /* 每条动态都带 id，站内搜索会深链过来（形如 /news 页的 #文件名）。
+       页头粘顶 72px（窄屏 64px），不留这一手，跳过来时日期与正文都被压在导航
+       下面 —— 「点了有反应、但看不全」的那种问题。数值与 /about、/contact 的
+       锚点同档（80px）再多一点：这一条上方还有分组标题与细线。 */
+    scroll-margin-top: 88px;
+  }
+
+  /**
+   * 被筛掉的条目与月份组。
+   *
+   * `.tl__item` 自己写着 `display: grid`，比浏览器默认的
+   * `[hidden] { display: none }` 优先级高 —— 不写这条，`hidden` 就形同虚设，
+   * 筛掉的条目仍然占着位置（页面上看起来「筛选没生效」）。
+   * 月份组现在虽然没有 display 规则，也一并显式收掉：
+   * 一条都不剩的月份只剩一个标题留在那里，比不筛还难看。
+   */
+  .tl__item[hidden],
+  .tl__group[hidden] {
+    display: none;
+  }
+
+  /**
+   * 日期：整个列表的视觉锚点。
+   *
+   * 这一列只显示「日」（月份由分组标题给），所以它必须能**独立**抓住视线 ——
+   * 旧版 13px / --ink-300 是正文的三级灰，扫列表时等于没有日期。
+   * 现在按 22px / --ink-800 走：字号接近正文（15px）的一倍半、颜色几乎到正文黑，
+   * 与右侧 12px 的浅蓝标签形成「日期重、标签轻」的层次，日期在前、修饰在后。
+   * 字号压在 h3(18px) 与 display 之间偏下，是刻意的：再大就会盖过标题。
+   * 数字走 .mono-num（tabular-nums），「06」与「16」等宽，左列右边界齐整。
+   */
+  .tl__day {
+    font-size: 1.375rem;
+    font-weight: var(--w-medium);
+    line-height: 1;
+    letter-spacing: var(--ls-tight);
+    color: var(--ink-800);
+    padding-top: 1px;
+  }
+
+  .tl__tag {
+    display: inline-block;
+    font-size: var(--text-meta);
+    letter-spacing: var(--ls-wide-sm);
+    color: var(--accent);
+    background: var(--accent-soft);
+    padding: 2px 8px;
+    border-radius: var(--r-sm);
+    margin-bottom: var(--s-3);
+  }
+
+  .tl__text {
+    font-size: var(--text-body);
+    color: var(--ink-700);
+  }
+
+  /* 配图：宽度上限 420px、按原始比例，不强制裁切比例（动态配图可能是封面、
+     也可能是手机截图，裁掉谁都不合适）。因此这里给不出宽高占位，
+     配图建议别放超宽大图。 */
+  .tl__image {
+    display: block;
+    width: auto;
+    max-width: min(100%, 420px);
+    height: auto;
+    margin-top: var(--s-4);
+    border-radius: var(--r-md);
+    border: 1px solid var(--line-1);
+  }
+
+  @media (max-width: 620px) {
+    .tl__item {
+      grid-template-columns: 44px minmax(0, 1fr);
+      gap: var(--s-4);
+    }
+
+    /* 窄屏整列收窄，日期跟着降一档，否则两位数字会贴到列边 */
+    .tl__day {
+      font-size: 1.25rem;
+    }
+  }
+</style>

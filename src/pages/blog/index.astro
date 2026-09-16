@@ -1,0 +1,66 @@
+---
+/**
+ * 杂谈 · /blog
+ *
+ * REQUIREMENTS §2.4：文章列表（封面 / 标题 / 日期 / 标签 / 摘要），点进去读正文。
+ * 边界：**动态 = 短讯（一两句），杂谈 = 长文** —— 需求里点名的分工。
+ *
+ * 两个刻意的「不做」：
+ *   · **不分页**。文章还少，分页只会让人多点一次「下一页」。到几十篇再说。
+ *   · **不做标签筛选 / 分类页**。理由写在 lib/types.ts 的 POST_TAGS 注释里。
+ *
+ * 卡片不走 `Reveal`：分隔线是 `.post + .post`（相邻兄弟选择器），
+ * 中间插一层包装元素就断了 —— 要么把分隔线改成页面级、要么别包。
+ * 列表本身就是首屏内容，不需要滚动淡入，所以选后者。
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PostCard from '../../components/PostCard.astro';
+import { SITE } from '../../config/site';
+import { getPosts, postHref, summaryOf } from '../../lib/posts';
+
+const posts = await getPosts();
+---
+
+<BaseLayout
+  title="杂谈"
+  description={`${SITE.name} 的创作手记、编曲思路、展会记录与器材杂感。`}
+>
+  <section class="container section">
+    <div class="section-head">
+      <h1 class="section-head__title">杂谈</h1>
+      <p class="section-head__note">{posts.length} 篇</p>
+    </div>
+
+    {
+      posts.length > 0 && (
+        <div class="posts">
+          {posts.map((entry) => (
+            <PostCard
+              title={entry.data.title}
+              date={entry.data.date}
+              href={postHref(entry.id)}
+              summary={summaryOf(entry)}
+              cover={entry.data.cover}
+              tags={entry.data.tags}
+            />
+          ))}
+        </div>
+      )
+    }
+
+    {
+      posts.length === 0 && (
+        <p class="empty">
+          还没有文章。在 <code>src/content/posts/</code> 里放一个 <code>.md</code>
+          即可，也可以跑 <code>npm run new:post</code> 生成骨架。
+        </p>
+      )
+    }
+  </section>
+</BaseLayout>
+
+<style>
+  .posts {
+    border-top: 1px solid var(--line-1);
+  }
+</style>

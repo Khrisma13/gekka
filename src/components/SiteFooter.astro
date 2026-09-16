@@ -1,0 +1,227 @@
+---
+import { NAV, SITE, asset, localePath, type Locale } from '../config/site';
+import { externalLinks, getLinks } from '../lib/links';
+
+interface Props {
+  locale?: Locale;
+}
+
+const { locale = 'zh' } = Astro.props;
+
+const year = new Date().getFullYear();
+const items = NAV.filter((item) => !(item.zhOnly && locale !== 'zh'));
+
+// 「Elsewhere」与 /about#links 是同一份数据（内容集合 links，见 DESIGN §21.7），
+// 这里只取**有 href 的**：页脚在每一页底部，一份抄不走的群号摆在这儿既点不动又占地方 ——
+// 要看群组入口去 /about#links。
+const socials = externalLinks(await getLinks());
+
+const termsLabel: Record<Locale, string> = {
+  zh: '转载规约',
+  ja: '転載について',
+  en: 'Usage policy',
+};
+
+/** MiSans 授权条款要求的字体署名，勿删 */
+const typefaceLabel: Record<Locale, string> = {
+  zh: '字体',
+  ja: '書体',
+  en: 'Typeface',
+};
+---
+
+<footer class="footer">
+  <div class="container">
+    <div class="footer__top">
+      <div class="footer__brand">
+        <div class="footer__brand-row">
+          <img
+            class="footer__mark"
+            src={asset('/brand/logo-mark.png')}
+            alt=""
+            width="35"
+            height="32"
+            aria-hidden="true"
+          />
+          <div>
+            <p class="footer__name">{SITE.name}</p>
+            <p class="footer__latin">{SITE.nameLatin}</p>
+          </div>
+        </div>
+        <p class="footer__tagline">{SITE.tagline[locale]}</p>
+      </div>
+
+      <nav class="footer__col" aria-label="页脚导航">
+        <p class="footer__heading">Site</p>
+        <ul>
+          {
+            items.map((item) => (
+              <li>
+                <a href={localePath(locale, item.href)}>{item.label[locale]}</a>
+              </li>
+            ))
+          }
+        </ul>
+      </nav>
+
+      <div class="footer__col">
+        <p class="footer__heading">Elsewhere</p>
+        <ul>
+          {
+            socials.length > 0 ? (
+              socials.map((s) => (
+                <li>
+                  <a href={s.href} target="_blank" rel="noopener noreferrer">
+                    {s.label}
+                  </a>
+                </li>
+              ))
+            ) : (
+              <li>
+                <span class="footer__pending">待补充</span>
+              </li>
+            )
+          }
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer__bottom">
+      <p class="footer__legal">
+        © {year} {SITE.name}
+      </p>
+      <div class="footer__meta">
+        <!-- 转载规约已并入「关于」页（DESIGN §21），这里直接指到那一节 ——
+             规约的文案全站只有一份，别再为它单开一页 -->
+        <p class="footer__legal">
+          <a class="link-underline" href={`${localePath(locale, '/about/')}#terms`}>
+            {termsLabel[locale]}
+          </a>
+        </p>
+        <!--
+          MiSans 字体署名。这不是装饰，是字体的授权条款要求的：
+          「您应在软件中特别注明使用了 MiSans 字体。」
+          删掉这行会构成违反字体许可，详见 scripts/fetch-fonts.mjs 顶部说明。
+        -->
+        <p class="footer__legal">
+          {typefaceLabel[locale]}
+          <a
+            class="link-underline"
+            href="https://hyperos.mi.com/font/"
+            target="_blank"
+            rel="noopener noreferrer">MiSans</a
+          >
+        </p>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .footer {
+    border-top: 1px solid var(--line-1);
+    background: var(--paper-0);
+    padding-block: var(--s-9) var(--s-6);
+    margin-top: var(--section-y);
+  }
+
+  .footer__top {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr 1fr;
+    gap: var(--s-8);
+    padding-bottom: var(--s-7);
+    border-bottom: 1px solid var(--line-1);
+  }
+
+  .footer__brand-row {
+    display: flex;
+    align-items: center;
+    gap: var(--s-4);
+  }
+
+  .footer__mark {
+    display: block;
+    height: 32px;
+    width: auto;
+    flex-shrink: 0;
+  }
+
+  .footer__name {
+    font-size: var(--text-h3);
+    color: var(--ink-900);
+    letter-spacing: 0.08em;
+    font-weight: var(--w-medium);
+  }
+
+  .footer__latin {
+    font-size: 9px;
+    letter-spacing: 0.28em;
+    color: var(--ink-400);
+    margin-top: 3px;
+  }
+
+  .footer__tagline {
+    margin-top: var(--s-4);
+    font-size: var(--text-sm);
+    color: var(--ink-500);
+    max-width: 28ch;
+  }
+
+  .footer__heading {
+    font-size: var(--text-meta);
+    font-weight: var(--w-medium);
+    letter-spacing: var(--ls-wide);
+    text-transform: uppercase;
+    color: var(--ink-400);
+    margin-bottom: var(--s-4);
+  }
+
+  .footer__col li + li {
+    margin-top: var(--s-3);
+  }
+
+  .footer__col a {
+    font-size: var(--text-sm);
+    color: var(--ink-600);
+  }
+
+  .footer__col a:hover {
+    color: var(--accent);
+  }
+
+  .footer__pending {
+    font-size: var(--text-sm);
+    color: var(--ink-300);
+  }
+
+  .footer__bottom {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--s-4) var(--s-5);
+    flex-wrap: wrap;
+    padding-top: var(--s-5);
+  }
+
+  .footer__meta {
+    display: flex;
+    gap: var(--s-5);
+    flex-wrap: wrap;
+  }
+
+  .footer__legal {
+    font-size: var(--text-meta);
+    color: var(--ink-400);
+    letter-spacing: var(--ls-wide-sm);
+  }
+
+  @media (max-width: 760px) {
+    .footer__top {
+      grid-template-columns: 1fr 1fr;
+      gap: var(--s-7) var(--s-5);
+    }
+
+    .footer__brand {
+      grid-column: 1 / -1;
+    }
+  }
+</style>

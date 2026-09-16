@@ -1,0 +1,368 @@
+---
+/**
+ * 首页 · 中文站
+ * 结构按 REQUIREMENTS.md §2.1。专辑、动态、杂谈全部接真实内容（内容集合）。
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Intro from '../components/Intro.astro';
+import Button from '../components/Button.astro';
+import Reveal from '../components/Reveal.astro';
+import AlbumCard from '../components/AlbumCard.astro';
+import PostCard from '../components/PostCard.astro';
+import { SITE, localePath } from '../config/site';
+import { formatDate } from '../lib/types';
+import { albumHref, getAlbums } from '../lib/albums';
+import { getNews } from '../lib/news';
+import { excerptOf } from '../lib/text';
+import { getPosts, postHref, summaryOf } from '../lib/posts';
+import { heroArtSrc, heroArtSrcset, HERO_ART_SIZE } from '../lib/media';
+
+// 已按发行日期倒序，取最新的四张
+const latestAlbums = (await getAlbums()).slice(0, 4);
+
+// 站内链接一律走 localePath —— 备用部署方案是 saiba.moe/gekka 子路径，
+// 写死的 /albums/ 会指到域名根上，整站导航失效
+const link = (path: string) => localePath('zh', path);
+
+// 动态已接内容集合（src/content/news/）。首页只取最新三条，且只显示正文第一段的
+// 纯文本 —— 首页不渲染正文（理由见 lib/text.ts 的 excerptOf）。
+const latestNews = (await getNews()).slice(0, 3).map((entry) => ({
+  date: entry.data.date,
+  tag: entry.data.tag,
+  body: excerptOf(entry.body),
+}));
+
+// 杂谈同理：取最新两篇，只显示摘要（手写优先，没写才回落到正文首段）
+const latestPosts = (await getPosts()).slice(0, 2);
+---
+
+<BaseLayout title={SITE.name} description={SITE.description.zh} intro>
+  <!-- ================= 主视觉 =================
+       满幅的看板娘作底、文字居中压在画面上（版式参照 logical-emotion.com 的首屏）。
+       图整幅铺满，画面自身的底色就是这一节的底色 —— 画面没有「边」，
+       也就不存在「贴上去的矩形」。文字的可读性由 .hero__veil 负责。
+       图的档位由 npm run oc 预生成，见 lib/media.ts 的 HERO_WIDTHS。 -->
+  <section class="hero">
+    <img
+      class="hero__bg"
+      src={heroArtSrc()}
+      srcset={heroArtSrcset()}
+      sizes="100vw"
+      width={HERO_ART_SIZE.width}
+      height={HERO_ART_SIZE.height}
+      alt=""
+      aria-hidden="true"
+      loading="eager"
+      fetchpriority="high"
+      decoding="async"
+    />
+    <div class="hero__veil" aria-hidden="true"></div>
+
+    <div class="hero__inner container">
+      <p class="eyebrow" style="--i:0">Doujin music circle</p>
+      <h1 class="hero__name" style="--i:1">{SITE.name}</h1>
+      <p class="hero__tagline" style="--i:2">{SITE.tagline.zh}</p>
+      <p class="hero__lead" style="--i:3">{SITE.description.zh}</p>
+      <div class="hero__actions" style="--i:4">
+        <Button href={link('/albums/')} variant="primary">浏览作品</Button>
+        <Button href={link('/about/')} variant="ghost">关于</Button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 最新专辑 ================= -->
+  <section class="container section" id="albums">
+    <div class="section-head">
+      <h2 class="section-head__title">最新作品</h2>
+      <a class="link-underline section-head__note" href={link('/albums/')}>全部专辑</a>
+    </div>
+
+    <div class="grid-albums">
+      {
+        latestAlbums.map((entry, i) => (
+          <Reveal delay={i * 70}>
+            <AlbumCard
+              catalog={entry.data.catalog}
+              title={entry.data.title}
+              releaseDate={entry.data.releaseDate}
+              cover={entry.data.cover}
+              href={albumHref(entry.data.catalog)}
+              priority={i === 0}
+            />
+          </Reveal>
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- ================= 最新动态 ================= -->
+  <section class="container section" id="news">
+    <div class="section-head">
+      <h2 class="section-head__title">近期动态</h2>
+      <a class="link-underline section-head__note" href={link('/news/')}>全部动态</a>
+    </div>
+
+    <ul class="news">
+      {
+        latestNews.map((item) => (
+          <li class="news__item">
+            <time class="meta news__date mono-num" datetime={item.date}>
+              {formatDate(item.date)}
+            </time>
+            <span class="news__tag">{item.tag}</span>
+            <p class="news__text">{item.body}</p>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+
+  <!-- ================= 最新杂谈 ================= -->
+  <section class="container section" id="journal">
+    <div class="section-head">
+      <h2 class="section-head__title">杂谈</h2>
+      <a class="link-underline section-head__note" href={link('/blog/')}>全部文章</a>
+    </div>
+
+    <div class="posts">
+      {
+        latestPosts.map((entry) => (
+          <PostCard
+            title={entry.data.title}
+            date={entry.data.date}
+            href={postHref(entry.id)}
+            summary={summaryOf(entry)}
+            cover={entry.data.cover}
+            tags={entry.data.tags}
+          />
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- 进场遮罩：只在首页挂，走 BaseLayout 的 overlay 插槽。
+       要不要出现的判断在 BaseHead（首帧之前），退场在组件自己的脚本里。 -->
+  <Intro slot="overlay" />
+</BaseLayout>
+
+<style>
+  /* 满幅主视觉：图铺满整节。
+     画面自身的底就是这一节的底 —— 因为没有边界，「矩形感」这个问题从根上不存在。
+     文字居中压在画面上，可读性交给 .hero__veil。
+     高度用 min-height 而不是固定高：内容长（窄屏文字换行多）时还能长高。 */
+  .hero {
+    position: relative;
+    isolation: isolate; /* 让下面两层负 z-index 的底只在本节内生效 */
+    display: grid;
+    place-items: center;
+    /* 满屏首屏：高度 = 视口高 − 页头高（72px），让背景图下边沿正好卡在
+       浏览器窗口下边沿。用 svh（小视口高）比 vh 准 —— 移动端地址栏收起后
+       vh 会偏大、露出下一屏。padding 仍兜底：极端矮视口下内容不溢出。 */
+    min-height: calc(100svh - 72px);
+    padding-block: clamp(56px, 9vh, 112px);
+    overflow: hidden;
+    /* 图整幅铺满，所以这一节自己不要底色 —— 但图还没到时底色会露出来，
+       给一个与页面同色的底，避免先闪一块白或一块灰。 */
+    background: var(--paper-50);
+  }
+
+  /* --- 底图 ---------------------------------------------------------------
+     cover + 偏上的对齐：宽屏下 cover 会纵向裁掉一大截，
+     对齐点偏上才能保证她的头（画面顶部约 8%）永远留在框里。 */
+  .hero__bg {
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: 50% 38%;
+  }
+
+  /* --- 压在图上的纸白蒙版 -------------------------------------------------
+     看板娘是浅底、暖发色、深色卫衣 —— 深色那团正好落在画面中央，
+     文字直接压上去会糊。这里盖一层纸白，且**底部收得最实**：
+       · 中心最重（文字所在），向四边渐弱（画面四角露出来，人物仍有存在感）
+       · 底部竖渐变到 100% 完全实色 —— 让背景图与下方白色区块之间
+         有一条干净的收边，而不是画面直接「断」在白区里
+     用 color-mix 挂在 --paper-50 上而不是写死 rgba()：换主题时蒙版跟着走。 */
+  .hero__veil {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background:
+      radial-gradient(
+        118% 76% at 50% 44%,
+        color-mix(in srgb, var(--paper-50) 94%, transparent) 0%,
+        color-mix(in srgb, var(--paper-50) 88%, transparent) 34%,
+        color-mix(in srgb, var(--paper-50) 58%, transparent) 64%,
+        color-mix(in srgb, var(--paper-50) 10%, transparent) 100%
+      ),
+      linear-gradient(
+        to bottom,
+        color-mix(in srgb, var(--paper-50) 0%, transparent) 0%,
+        color-mix(in srgb, var(--paper-50) 0%, transparent) 58%,
+        color-mix(in srgb, var(--paper-50) 40%, transparent) 76%,
+        var(--paper-50) 92%,
+        var(--paper-50) 100%
+      );
+  }
+
+  /* --- 居中的文字 --------------------------------------------------------- */
+  .hero__inner {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .hero__name {
+    font-size: var(--text-display);
+    font-weight: var(--w-light);
+    letter-spacing: 0.12em;
+    color: var(--ink-900);
+    margin-top: var(--s-5);
+    /* 字距会在末字右侧留一截空档，居中时整行会看着偏左 —— 补回来 */
+    text-indent: 0.12em;
+  }
+
+  .hero__tagline {
+    margin-top: var(--s-4);
+    font-size: clamp(1rem, 1.5vw, 1.25rem);
+    font-weight: var(--w-light);
+    color: var(--ink-700);
+    letter-spacing: 0.06em;
+  }
+
+  .hero__lead {
+    margin-top: var(--s-6);
+    max-width: 40ch;
+    font-size: var(--text-body);
+    color: var(--ink-600);
+  }
+
+  .hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--s-4);
+    margin-top: var(--s-8);
+  }
+
+  /* --- 进场遮罩揭开时，主视觉的文字依次浮上来（次序看模板里的 --i） ---------
+     只在遮罩真的播过时跑。直接进首页、或本会话第二次进来时，这些文字本来就待在
+     该在的位置上，不该再动一遍 —— 否则会变成「每次回首页都抖一下」。
+     位移沿用 .reveal 的 14px：全站浮入只这一个幅度。
+
+     时机由 global.css「首页进场遮罩」那节的 --intro-rise-* 给，是退场的第三拍：
+     **第一件在纸面还没揭完时就动了**，于是「揭开」看到的是已经就位的画面，而不是
+     揭开一张白纸、内容再慢慢长出来。最后一件略滞后于纸面收尾，留一点余韵。 */
+  :global(html[data-intro='out']) .hero__inner > * {
+    animation: hero-rise var(--intro-rise-dur) var(--ease) both;
+    animation-delay: calc(var(--intro-rise-delay) + var(--i, 0) * var(--intro-rise-step));
+  }
+
+  @keyframes hero-rise {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* 纸面揭开的同一段时间里，画面从 1.03 收回 1 —— 一层很浅的纵深，让「揭开」不只是
+     透明度在变。时长与延迟跟纸面共用同两个 token，于是「画在纸底下浮出来」是一件动作，
+     不是两件。幅度压到 3%：它该被感觉到，不该被看见。 */
+  :global(html[data-intro='out']) .hero__bg {
+    animation: hero-bg-settle var(--intro-veil-dur) var(--intro-veil-ease) var(--intro-veil-delay) both;
+  }
+
+  @keyframes hero-bg-settle {
+    from {
+      transform: scale(1.03);
+    }
+    to {
+      transform: none;
+    }
+  }
+
+  /* 窄屏：页头更矮（64px），首屏高度随之调整；蒙版再加厚一点 ——
+     手机上可见的画面更少、更放大，人物的暗部离文字更近。 */
+  @media (max-width: 640px) {
+    .hero {
+      min-height: calc(100svh - 64px);
+    }
+
+    .hero__veil {
+      background:
+        radial-gradient(
+          132% 68% at 50% 44%,
+          color-mix(in srgb, var(--paper-50) 94%, transparent) 0%,
+          color-mix(in srgb, var(--paper-50) 88%, transparent) 38%,
+          color-mix(in srgb, var(--paper-50) 60%, transparent) 68%,
+          color-mix(in srgb, var(--paper-50) 10%, transparent) 100%
+        ),
+        linear-gradient(
+          to bottom,
+          color-mix(in srgb, var(--paper-50) 0%, transparent) 0%,
+          color-mix(in srgb, var(--paper-50) 0%, transparent) 54%,
+          color-mix(in srgb, var(--paper-50) 44%, transparent) 74%,
+          var(--paper-50) 92%,
+          var(--paper-50) 100%
+        );
+    }
+  }
+
+  .grid-albums {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: var(--s-6) var(--s-5);
+  }
+
+  .news__item {
+    display: grid;
+    grid-template-columns: 96px 68px minmax(0, 1fr);
+    gap: var(--s-5);
+    align-items: baseline;
+    padding-block: var(--s-4);
+    border-bottom: 1px solid var(--line-1);
+  }
+
+  .news__date {
+    color: var(--ink-400);
+  }
+
+  .news__tag {
+    font-size: var(--text-meta);
+    letter-spacing: var(--ls-wide-sm);
+    color: var(--accent);
+    background: var(--accent-soft);
+    padding: 2px 8px;
+    border-radius: var(--r-sm);
+    justify-self: start;
+  }
+
+  .news__text {
+    font-size: var(--text-body);
+    color: var(--ink-700);
+  }
+
+  .posts {
+    border-top: 1px solid var(--line-1);
+  }
+
+  @media (max-width: 640px) {
+    .news__item {
+      grid-template-columns: 1fr auto;
+      gap: var(--s-2) var(--s-4);
+    }
+
+    .news__text {
+      grid-column: 1 / -1;
+    }
+  }
+</style>

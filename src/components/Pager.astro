@@ -1,0 +1,104 @@
+---
+/**
+ * 相邻条目导航：上一篇 / 下一篇（专辑页是「上一张 / 下一张」）。
+ *
+ * 专辑详情页与杂谈详情页的版式要求一模一样 —— 两列、右侧靠右、悬停标题转强调色，
+ * 区别只有文案与第二行的小字。所以抽成一个组件，而不是在两处各写一份 scoped 样式
+ * （原先这段样式只存在于专辑页的样式块里，正是复制一份的开端）。
+ *
+ * 两侧的「方向」定义全站一致：**previous = 更早发布的那个**（专辑、文章皆然）。
+ */
+interface Neighbour {
+  href: string;
+  title: string;
+  /** 第二行的小字：专辑给编号，文章给日期 */
+  meta?: string;
+}
+
+interface Props {
+  previous?: Neighbour;
+  next?: Neighbour;
+  previousLabel?: string;
+  nextLabel?: string;
+  /** 无障碍标签，说明这组链接通向哪里 */
+  label?: string;
+}
+
+const {
+  previous,
+  next,
+  previousLabel = '上一篇',
+  nextLabel = '下一篇',
+  label = '文章导航',
+} = Astro.props;
+---
+
+{
+  (previous || next) && (
+    <nav class="container section--tight pager" aria-label={label}>
+      <div class="pager__slot">
+        {previous && (
+          <a class="pager__link pager__link--prev" href={previous.href}>
+            <span class="eyebrow">← {previousLabel}</span>
+            <span class="pager__title">{previous.title}</span>
+            {previous.meta && <span class="meta mono-num">{previous.meta}</span>}
+          </a>
+        )}
+      </div>
+      <div class="pager__slot pager__slot--end">
+        {next && (
+          <a class="pager__link pager__link--next" href={next.href}>
+            <span class="eyebrow">{nextLabel} →</span>
+            <span class="pager__title">{next.title}</span>
+            {next.meta && <span class="meta mono-num">{next.meta}</span>}
+          </a>
+        )}
+      </div>
+    </nav>
+  )
+}
+
+<style>
+  .pager {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s-5);
+    border-top: 1px solid var(--line-1);
+    margin-top: var(--section-y);
+    padding-block: var(--s-7) 0;
+  }
+
+  .pager__slot--end {
+    text-align: right;
+  }
+
+  .pager__link {
+    display: inline-flex;
+    flex-direction: column;
+    gap: var(--s-2);
+  }
+
+  .pager__title {
+    font-size: var(--text-h3);
+    font-weight: var(--w-light);
+    color: var(--ink-900);
+    transition: color var(--dur-fast) var(--ease);
+  }
+
+  .pager__link:hover .pager__title {
+    color: var(--accent);
+  }
+
+  /* 断点跟随专辑页原有的 640px —— 抽组件不该顺手改掉老页面的行为 */
+  @media (max-width: 640px) {
+    .pager {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--s-6);
+    }
+
+    /* 窄屏堆成一列后，右侧靠右会让两块文字左边界错开，反而显得散 */
+    .pager__slot--end {
+      text-align: left;
+    }
+  }
+</style>

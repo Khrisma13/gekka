@@ -1,0 +1,875 @@
+---
+/**
+ * M1 视觉方向样张
+ * 用真实组件拼出，不是示意图 —— 你现在看到的就是上线后的样子。
+ * 上线前会从站点导航与 sitemap 中排除。
+ */
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Button from '../components/Button.astro';
+import Reveal from '../components/Reveal.astro';
+import AlbumCard from '../components/AlbumCard.astro';
+import TrackList from '../components/TrackList.astro';
+import Timeline from '../components/Timeline.astro';
+import PostCard from '../components/PostCard.astro';
+import MemberCard from '../components/MemberCard.astro';
+// 成员已接真实内容（内容集合），样张页也用它 —— 组件的样子就是线上的样子
+import { getMembers } from '../lib/members';
+import { sampleAlbum, sampleAlbums } from '../data/samples';
+// 动态与杂谈都是真实内容（内容集合），样张页也用它 —— 组件的样子就是线上的样子
+import { getNews } from '../lib/news';
+import { getPosts, postHref, summaryOf } from '../lib/posts';
+
+const news = await getNews();
+const posts = await getPosts();
+const members = await getMembers();
+
+const neutrals = [
+  { token: '--paper-0', hex: '#FFFFFF', use: '卡片、内容面' },
+  { token: '--paper-50', hex: '#FAFBFC', use: '页面底色' },
+  { token: '--paper-100', hex: '#F2F4F6', use: '内嵌区块、占位' },
+  { token: '--line-1', hex: '#E3E7EA', use: '发丝分隔线' },
+  { token: '--line-2', hex: '#CFD5DA', use: '较强边界' },
+  { token: '--ink-900', hex: '#0B0E12', use: '标题、强调' },
+  { token: '--ink-700', hex: '#2E353D', use: '正文' },
+  { token: '--ink-500', hex: '#6B737C', use: '次要文字' },
+  { token: '--ink-400', hex: '#8B939C', use: '日期、编号' },
+  { token: '--ink-300', hex: '#AAB1B8', use: '占位、禁用' },
+];
+
+const accents = [
+  {
+    key: 'A',
+    name: '月白青',
+    note: '当前启用',
+    accent: '#3F6E8F',
+    soft: '#EDF3F7',
+    line: '#C3D6E2',
+  },
+  {
+    key: 'B',
+    name: '鈍銀',
+    note: '最克制，几乎全灰',
+    accent: '#5F6C77',
+    soft: '#F0F2F4',
+    line: '#CCD2D8',
+  },
+  {
+    key: 'C',
+    name: '霜紫',
+    note: '带一点夜色',
+    accent: '#6C6A93',
+    soft: '#F1F1F7',
+    line: '#D2D1E3',
+  },
+];
+
+const typeScale = [
+  { token: '--text-display', label: 'Display', spec: '38 → 64px / 300 / 1.12', sample: '月華抄' },
+  { token: '--text-h1', label: 'H1', spec: '28 → 40px / 300 / 1.35', sample: '作品一览' },
+  { token: '--text-h2', label: 'H2', spec: '22 → 28px / 300 / 1.35', sample: '近期动态' },
+  { token: '--text-h3', label: 'H3', spec: '18px / 400 / 1.35', sample: '宵闇のオルゴール' },
+  { token: '--text-body', label: 'Body', spec: '15px / 400 / 1.8', sample: '以「月」为线索串起的东方 Project 编曲集。' },
+  { token: '--text-sm', label: 'Small', spec: '13px / 400 / 1.5', sample: '编曲 霜月 · 演唱 澪' },
+  { token: '--text-meta', label: 'Meta', spec: '12px / 500 / 宽字距', sample: 'GKCD-001' },
+];
+
+const spacing = [
+  { token: '--s-1', px: 4 },
+  { token: '--s-2', px: 8 },
+  { token: '--s-3', px: 12 },
+  { token: '--s-4', px: 16 },
+  { token: '--s-5', px: 24 },
+  { token: '--s-6', px: 32 },
+  { token: '--s-7', px: 48 },
+  { token: '--s-8', px: 64 },
+  { token: '--s-9', px: 96 },
+];
+---
+
+<BaseLayout
+  title="视觉样张"
+  description="月華社官网 M1 视觉方向样张：配色、字体、组件与动效。"
+  noindex
+>
+  <!-- ================= 引言 ================= -->
+  <div class="container cover">
+    <p class="eyebrow">M1 · Visual direction</p>
+    <h1 class="cover__title">清冷极简</h1>
+    <p class="cover__lead">
+      以留白为主要材料，让作品本身成为画面里唯一的重点。全站非衬线，只有一个强调色，
+      引用与分隔只用发丝线。下面所有组件都是真实可用的代码，不是示意图。
+    </p>
+    <ul class="cover__principles">
+      <li>
+        <span class="cover__num mono-num">01</span>
+        <strong>留白优先</strong>
+        <span>区块间距 64–120px，正文行高 1.8。宁可空，不要挤。</span>
+      </li>
+      <li>
+        <span class="cover__num mono-num">02</span>
+        <strong>单一强调色</strong>
+        <span>全站只有一个月白青，用于链接、激活态与极少量点缀。</span>
+      </li>
+      <li>
+        <span class="cover__num mono-num">03</span>
+        <strong>只用三档字重</strong>
+        <span>300 大标题 / 400 正文 / 500 强调。不用 600 以上。</span>
+      </li>
+      <li>
+        <span class="cover__num mono-num">04</span>
+        <strong>动效服务于阅读</strong>
+        <span>只做滚动淡入与下划线展开，180–560ms，系统开启减少动效时全部关闭。</span>
+      </li>
+    </ul>
+  </div>
+
+  <!-- ================= 配色 ================= -->
+  <section class="container section" id="color">
+    <div class="section-head">
+      <h2 class="section-head__title">配色</h2>
+      <p class="section-head__note">中性色带一丝冷调蓝，避免纯灰的沉闷</p>
+    </div>
+
+    <div class="swatches">
+      {
+        neutrals.map((c) => (
+          <div class="swatch">
+            <div class="swatch__chip" style={`background:${c.hex}`} />
+            <p class="swatch__hex mono-num">{c.hex}</p>
+            <p class="swatch__token">{c.token}</p>
+            <p class="swatch__use">{c.use}</p>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- ================= 强调色候选 ================= -->
+  <section class="container section" id="accent">
+    <div class="section-head">
+      <h2 class="section-head__title">强调色 · 三选一</h2>
+      <p class="section-head__note">选定后改 tokens.css 一个变量即可全局生效</p>
+    </div>
+
+    <div class="accents">
+      {
+        accents.map((a) => (
+          <div class="acc" style={`--accent:${a.accent}; --accent-soft:${a.soft}; --accent-line:${a.line};`}>
+            <div class="acc__head">
+              <span class="acc__key">{a.key}</span>
+              <span class="acc__name">{a.name}</span>
+              {a.key === 'A' && <span class="acc__badge">当前启用</span>}
+            </div>
+
+            <div class="acc__strip" style={`background:${a.accent}`} />
+
+            <div class="acc__demo">
+              <a class="link-underline" href="#accent">链接悬停效果</a>
+              <span class="acc__tag">发行</span>
+              <button class="acc__btn" type="button">通贩页面</button>
+              <p class="acc__bar" />
+            </div>
+
+            <p class="acc__meta mono-num">{a.accent}</p>
+            <p class="acc__note">{a.note}</p>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- ================= 字体 ================= -->
+  <section class="container section" id="type">
+    <div class="section-head">
+      <h2 class="section-head__title">字体与字号阶梯</h2>
+      <p class="section-head__note">自托管 MiSans · 拉丁 / 假名 / 汉字同源一套</p>
+    </div>
+
+    <div class="family">
+      <div class="family__block">
+        <p class="eyebrow">拉丁 / 数字</p>
+        <p class="family__spec">MiSans — Aa Bb Cc 0123</p>
+      </div>
+      <div class="family__block">
+        <p class="eyebrow">简体中文</p>
+        <p class="family__spec">月華社 東方 編曲 永 抄</p>
+      </div>
+      <div class="family__block">
+        <p class="eyebrow">日本語</p>
+        <p class="family__spec">月華社の音楽、幻想郷の調べ。ヴォーカル</p>
+      </div>
+    </div>
+
+    <ul class="weights">
+      {
+        [
+          { w: 300, name: 'Light', use: '大标题', note: '内部 250' },
+          { w: 400, name: 'Regular', use: '正文', note: '内部 330' },
+          { w: 500, name: 'Medium', use: '导航 / 强调', note: '内部 380' },
+        ].map((it) => (
+          <li class="weights__row">
+            <span class="scale__label">
+              <span class="scale__name">{it.name}</span>
+              <span class="scale__spec mono-num">{it.w} · {it.use}</span>
+            </span>
+            <span class="weights__sample" style={`font-weight:${it.w}`}>
+              月華社 東方 Project 0123
+            </span>
+            <span class="weights__note mono-num">{it.note}</span>
+          </li>
+        ))
+      }
+    </ul>
+
+    <ul class="scale">
+      {
+        typeScale.map((t) => (
+          <li class="scale__row">
+            <span class="scale__label">
+              <span class="scale__name">{t.label}</span>
+              <span class="scale__spec mono-num">{t.spec}</span>
+            </span>
+            <span class="scale__sample" style={`font-size:var(${t.token})`}>
+              {t.sample}
+            </span>
+          </li>
+        ))
+      }
+    </ul>
+
+    <div class="space">
+      <p class="eyebrow">间距基数 4px</p>
+      <div class="space__row">
+        {
+          spacing.map((s) => (
+            <span class="space__item">
+              <span class="space__bar" style={`width:${s.px}px`} />
+              <span class="space__px mono-num">{s.px}</span>
+            </span>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 按钮 ================= -->
+  <section class="container section" id="buttons">
+    <div class="section-head">
+      <h2 class="section-head__title">按钮</h2>
+      <p class="section-head__note">主按钮一页最多一个</p>
+    </div>
+
+    <div class="row">
+      <Button variant="primary" size="md">通贩页面</Button>
+      <Button variant="ghost" size="md">Bilibili 试听</Button>
+      <Button variant="text" size="md">查看曲目</Button>
+      <Button variant="ghost" size="sm">全部专辑</Button>
+    </div>
+  </section>
+
+  <!-- ================= 专辑卡 ================= -->
+  <section class="container section" id="album">
+    <div class="section-head">
+      <h2 class="section-head__title">专辑卡片</h2>
+      <p class="section-head__note">封面未到位时显示编号占位，布局不跳动</p>
+    </div>
+
+    <div class="grid-albums">
+      {
+        sampleAlbums.map((album, i) => (
+          <Reveal delay={i * 70}>
+            <AlbumCard
+              catalog={album.catalog}
+              title={album.title}
+              releaseDate={album.releaseDate}
+              cover={album.cover}
+              href="#"
+              priority={i === 0}
+            />
+          </Reveal>
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- ================= 曲目表 ================= -->
+  <section class="container section" id="tracks">
+    <div class="section-head">
+      <h2 class="section-head__title">曲目表</h2>
+      <p class="section-head__note">二创曲自动带出原曲与出处</p>
+    </div>
+
+    <p class="caption">
+      示例专辑 <span class="mono-num">{sampleAlbum.catalog}</span> ·《{sampleAlbum.title}》·
+      {String(sampleAlbum.tracks?.length ?? 0)} 曲
+    </p>
+
+    <TrackList tracks={sampleAlbum.tracks ?? []} />
+  </section>
+
+  <!-- ================= 动态 ================= -->
+  <section class="container container--text section" id="news">
+    <div class="section-head">
+      <h2 class="section-head__title">社团动态</h2>
+      <p class="section-head__note">仅中文站提供</p>
+    </div>
+    <Timeline entries={news} />
+  </section>
+
+  <!-- ================= 杂谈 ================= -->
+  <section class="container section" id="blog">
+    <div class="section-head">
+      <h2 class="section-head__title">杂谈文章</h2>
+      <p class="section-head__note">有封面时缩略图在左；没有封面就收成单列</p>
+    </div>
+    <div class="posts">
+      {
+        posts.map((entry) => (
+          <PostCard
+            title={entry.data.title}
+            date={entry.data.date}
+            href={postHref(entry.id)}
+            summary={summaryOf(entry)}
+            cover={entry.data.cover}
+            tags={entry.data.tags}
+          />
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- ================= 成员 ================= -->
+  <section class="container section" id="members">
+    <div class="section-head">
+      <h2 class="section-head__title">成员</h2>
+      <p class="section-head__note">退出与合作有独立标记</p>
+    </div>
+    <div class="grid-members">
+      {members.map((entry) => <MemberCard member={entry.data} />)}
+    </div>
+  </section>
+
+  <!-- ================= 动效 ================= -->
+  <section class="container section" id="motion">
+    <div class="section-head">
+      <h2 class="section-head__title">动效</h2>
+      <p class="section-head__note">向上滚动再回来，可重复观察</p>
+    </div>
+
+    <div class="grid-motion">
+      {
+        [0, 1, 2].map((i) => (
+          <Reveal delay={i * 90}>
+            <div class="motion__box">
+              <p class="eyebrow">Reveal</p>
+              <p class="motion__note">淡入 + 上移 14px · 560ms</p>
+            </div>
+          </Reveal>
+        ))
+      }
+    </div>
+
+    <ul class="motion__list">
+      <li><span class="mono-num">180ms</span> 悬停变色、边框加深</li>
+      <li><span class="mono-num">320ms</span> 下划线从左展开、封面轻微上浮</li>
+      <li><span class="mono-num">560ms</span> 滚动进入淡入</li>
+      <li><span class="mono-num">—</span> 缓动统一 cubic-bezier(.22, 1, .36, 1)</li>
+    </ul>
+  </section>
+
+  <!-- ================= 定稿状态 ================= -->
+  <section class="container section" id="status">
+    <div class="measure">
+      <div class="section-head">
+        <h2 class="section-head__title">M1 定稿</h2>
+        <p class="section-head__note">已确认，可直接进入 M2</p>
+      </div>
+
+      <ul class="done">
+        <li>
+          <span class="done__mark" aria-hidden="true">✓</span>
+          <span>
+            <strong>强调色 A · 月白青</strong>
+            <em class="mono-num">#3F6E8F</em> —— 已写入 <em class="mono-num">tokens.css</em>，改一个变量全站生效
+          </span>
+        </li>
+        <li>
+          <span class="done__mark" aria-hidden="true">✓</span>
+          <span>
+            <strong>专辑卡常驻标题</strong> —— 悬停才出现的信息在手机上等于不存在，改为常驻显示
+          </span>
+        </li>
+        <li>
+          <span class="done__mark" aria-hidden="true">✓</span>
+          <span>
+            <strong>字体自托管 MiSans</strong> —— 三档字重共 300 个分片，浏览器按实际用字加载；
+            页面里已无任何第三方字体域名。许可要求署名，页脚已标注
+          </span>
+        </li>
+      </ul>
+
+      <p class="done__head">仍待你提供</p>
+      <ul class="done done--pending">
+        <li>
+          <span class="done__mark" aria-hidden="true">·</span>
+          <span><strong>首页主视觉素材</strong> —— Logo / 主视觉图。M2 先用文字排版撑住，补图后替换</span>
+        </li>
+        <li>
+          <span class="done__mark" aria-hidden="true">·</span>
+          <span>
+            <strong>日文字形要不要单独特化</strong> —— MiSans 免费版没有独立日文包，
+            日文页的汉字目前是中文字形。假名没问题（Monotype 专门制作），
+            但「直」「骨」这类中日写法有差的字，会按中文规范显示
+          </span>
+        </li>
+      </ul>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  /* 样张页专用样式，不进入全站样式表 */
+
+  .cover {
+    padding-block: clamp(56px, 8vw, 104px) clamp(40px, 5vw, 64px);
+    border-bottom: 1px solid var(--line-1);
+  }
+
+  .cover__title {
+    font-size: var(--text-display);
+    font-weight: var(--w-light);
+    letter-spacing: 0.06em;
+    margin-top: var(--s-4);
+    color: var(--ink-900);
+  }
+
+  .cover__lead {
+    margin-top: var(--s-5);
+    max-width: 46ch;
+    color: var(--ink-500);
+    font-size: var(--text-body);
+  }
+
+  .cover__principles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: var(--s-5);
+    margin-top: var(--s-8);
+  }
+
+  .cover__principles li {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-2);
+    padding-top: var(--s-4);
+    border-top: 1px solid var(--line-2);
+  }
+
+  .cover__num {
+    font-size: var(--text-meta);
+    color: var(--ink-300);
+    letter-spacing: var(--ls-wide);
+  }
+
+  .cover__principles strong {
+    font-size: var(--text-body);
+    font-weight: var(--w-medium);
+    color: var(--ink-900);
+  }
+
+  .cover__principles span:last-child {
+    font-size: var(--text-sm);
+    color: var(--ink-500);
+    line-height: var(--lh-tight);
+  }
+
+  /* --- 色板 --- */
+  .swatches {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(126px, 1fr));
+    gap: var(--s-4);
+  }
+
+  .swatch__chip {
+    height: 76px;
+    border: 1px solid var(--line-1);
+    border-radius: var(--r-md);
+  }
+
+  .swatch__hex {
+    margin-top: var(--s-3);
+    font-size: var(--text-meta);
+    color: var(--ink-700);
+    letter-spacing: var(--ls-wide-sm);
+  }
+
+  .swatch__token {
+    font-size: 11px;
+    color: var(--ink-400);
+    font-family: var(--font-mono);
+    margin-top: 2px;
+  }
+
+  .swatch__use {
+    font-size: var(--text-meta);
+    color: var(--ink-400);
+    margin-top: var(--s-1);
+  }
+
+  /* --- 强调色候选 --- */
+  .accents {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: var(--s-5);
+  }
+
+  .acc {
+    border: 1px solid var(--line-1);
+    border-radius: var(--r-lg);
+    padding: var(--s-5);
+    background: var(--paper-0);
+  }
+
+  .acc__head {
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+  }
+
+  .acc__key {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: var(--r-full);
+    border: 1px solid var(--line-2);
+    font-size: 11px;
+    color: var(--ink-500);
+  }
+
+  .acc__name {
+    font-size: var(--text-body);
+    font-weight: var(--w-medium);
+    color: var(--ink-900);
+  }
+
+  .acc__badge {
+    font-size: 11px;
+    letter-spacing: var(--ls-wide-sm);
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-radius: var(--r-sm);
+    padding: 1px 6px;
+    margin-left: auto;
+  }
+
+  .acc__strip {
+    height: 3px;
+    border-radius: var(--r-full);
+    margin: var(--s-4) 0 var(--s-5);
+  }
+
+  .acc__demo {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--s-4);
+    padding-bottom: var(--s-5);
+    border-bottom: 1px solid var(--line-1);
+  }
+
+  .acc__tag {
+    font-size: var(--text-meta);
+    letter-spacing: var(--ls-wide-sm);
+    color: var(--accent);
+    background: var(--accent-soft);
+    padding: 2px 8px;
+    border-radius: var(--r-sm);
+  }
+
+  .acc__btn {
+    font-size: var(--text-sm);
+    font-weight: var(--w-medium);
+    letter-spacing: var(--ls-wide-sm);
+    padding: 9px 18px;
+    border: 1px solid var(--accent);
+    border-radius: var(--r-md);
+    color: var(--accent);
+    background: transparent;
+  }
+
+  .acc__btn:hover {
+    background: var(--accent);
+    color: var(--paper-0);
+  }
+
+  .acc__bar {
+    width: 100%;
+    height: 1px;
+    background: var(--accent-line);
+  }
+
+  .acc__meta {
+    margin-top: var(--s-4);
+    font-size: var(--text-meta);
+    color: var(--ink-500);
+    letter-spacing: var(--ls-wide-sm);
+  }
+
+  .acc__note {
+    font-size: var(--text-meta);
+    color: var(--ink-400);
+    margin-top: 2px;
+  }
+
+  /* --- 字体 --- */
+  .family {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: var(--s-5);
+    padding-bottom: var(--s-7);
+  }
+
+  .family__spec {
+    margin-top: var(--s-3);
+    font-size: var(--text-h3);
+    color: var(--ink-900);
+    line-height: var(--lh-tight);
+  }
+
+  .scale__row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--s-6);
+    padding-block: var(--s-5);
+    border-top: 1px solid var(--line-1);
+  }
+
+  .scale__label {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex-shrink: 0;
+    width: 118px;
+  }
+
+  .scale__name {
+    font-size: var(--text-sm);
+    font-weight: var(--w-medium);
+    color: var(--ink-700);
+  }
+
+  .scale__spec {
+    font-size: 11px;
+    color: var(--ink-400);
+    letter-spacing: var(--ls-wide-sm);
+  }
+
+  .scale__sample {
+    color: var(--ink-900);
+    font-weight: var(--w-light);
+    line-height: 1.3;
+    text-align: right;
+  }
+
+  /* --- 字重：三档，右侧标注字体内部的真实字重值 --- */
+  .weights {
+    margin-top: var(--s-7);
+    padding-top: var(--s-5);
+    border-top: 1px solid var(--line-1);
+  }
+
+  .weights__row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--s-6);
+    padding-block: var(--s-5);
+    border-bottom: 1px solid var(--line-1);
+  }
+
+  .weights__sample {
+    flex: 1;
+    font-size: var(--text-h3);
+    color: var(--ink-900);
+    line-height: 1.3;
+  }
+
+  .weights__note {
+    flex-shrink: 0;
+    width: 96px;
+    text-align: right;
+    font-size: 11px;
+    color: var(--ink-300);
+    letter-spacing: var(--ls-wide-sm);
+  }
+
+  /* --- 间距 --- */
+  .space {
+    margin-top: var(--s-8);
+    padding-top: var(--s-5);
+    border-top: 1px solid var(--line-1);
+  }
+
+  .space__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--s-5);
+    margin-top: var(--s-4);
+  }
+
+  .space__item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--s-2);
+  }
+
+  .space__bar {
+    height: 18px;
+    min-width: 2px;
+    background: var(--ink-300);
+  }
+
+  .space__px {
+    font-size: 11px;
+    color: var(--ink-400);
+  }
+
+  /* --- 组件容器 --- */
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-4);
+  }
+
+  .caption {
+    font-size: var(--text-sm);
+    color: var(--ink-400);
+    margin-bottom: var(--s-5);
+  }
+
+  .grid-albums {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: var(--s-6) var(--s-5);
+  }
+
+  .posts {
+    border-top: 1px solid var(--line-1);
+  }
+
+  .grid-members {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: var(--s-7) var(--s-8);
+  }
+
+  .grid-motion {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--s-5);
+  }
+
+  .motion__box {
+    padding: var(--s-6) var(--s-5);
+    border: 1px solid var(--line-1);
+    border-radius: var(--r-md);
+    background: var(--paper-0);
+    text-align: center;
+  }
+
+  .motion__note {
+    margin-top: var(--s-3);
+    font-size: var(--text-sm);
+    color: var(--ink-500);
+  }
+
+  .motion__list {
+    margin-top: var(--s-6);
+    border-top: 1px solid var(--line-1);
+  }
+
+  .motion__list li {
+    display: flex;
+    gap: var(--s-5);
+    padding-block: var(--s-3);
+    border-bottom: 1px solid var(--line-1);
+    font-size: var(--text-sm);
+    color: var(--ink-600);
+  }
+
+  .motion__list span {
+    width: 60px;
+    flex-shrink: 0;
+    color: var(--ink-400);
+    font-size: var(--text-meta);
+  }
+
+  /* --- 待确认 --- */
+  /* --- M1 定稿清单 --- */
+  .done li {
+    display: flex;
+    gap: var(--s-3);
+    padding-block: var(--s-4);
+    border-top: 1px solid var(--line-1);
+  }
+
+  .done li:last-child {
+    border-bottom: 1px solid var(--line-1);
+  }
+
+  /* 用子选择器提高特异性，否则会被下面的 .done span 覆盖掉颜色 */
+  .done > .done__mark {
+    flex-shrink: 0;
+    color: var(--accent);
+    font-size: var(--text-sm);
+    line-height: 1.75;
+  }
+
+  .done--pending > .done__mark {
+    color: var(--ink-300);
+  }
+
+  .done__head {
+    margin-top: var(--s-8);
+    margin-bottom: var(--s-1);
+    font-size: var(--text-meta);
+    font-weight: var(--w-medium);
+    letter-spacing: var(--ls-wide);
+    text-transform: uppercase;
+    color: var(--ink-400);
+  }
+
+  .done strong {
+    font-size: var(--text-body);
+    font-weight: var(--w-medium);
+    color: var(--ink-900);
+  }
+
+  .done span {
+    font-size: var(--text-sm);
+    color: var(--ink-500);
+    line-height: var(--lh-tight);
+  }
+
+  .done em {
+    font-style: normal;
+    color: var(--ink-700);
+  }
+
+  @media (max-width: 620px) {
+    .scale__row {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: var(--s-3);
+    }
+
+    .scale__sample {
+      text-align: left;
+    }
+  }
+</style>

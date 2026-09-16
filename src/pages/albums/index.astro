@@ -1,0 +1,209 @@
+---
+/**
+ * 专辑列表页 · /albums
+ *
+ * 封面网格，按发行时间倒序（REQUIREMENTS §2.2）。
+ * 年份 / 类型 / 系列筛选用一小段内联脚本做，无框架、无请求：
+ * 全部条目本来就在 HTML 里，没有 JS 时最差情况也只是「筛选按钮不工作，内容全在」。
+ *
+ * 「系列」是正式（GKCD）与非正式（GKSL）的分野，排在最前面 ——
+ * 它是这张表最根本的一刀，年份与类型都是在某一系列内部再细分。
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import AlbumCard from '../../components/AlbumCard.astro';
+import Reveal from '../../components/Reveal.astro';
+import { SITE } from '../../config/site';
+import {
+  albumHref,
+  getAlbums,
+  seriesListOf,
+  seriesOf,
+  SERIES_LABELS,
+  typesOf,
+  yearsOf,
+} from '../../lib/albums';
+
+const albums = await getAlbums();
+const series = seriesListOf(albums);
+const years = yearsOf(albums);
+const types = typesOf(albums);
+const hasFilters = series.length > 1 || years.length > 1 || types.length > 1;
+---
+
+<BaseLayout
+  title="作品"
+  description={`${SITE.name} 已发行的专辑与同人音乐作品一览。`}
+>
+  <section class="container section">
+    <div class="section-head">
+      <h2 class="section-head__title">作品</h2>
+      <p class="section-head__note">{albums.length} 张</p>
+    </div>
+
+    {
+      /* 只有一个选项的筛选组没有意义，直接不显示 —— 免得用户
+         点了半天发现筛选毫无变化，反而怀疑功能坏了 */
+      <div class="filters" id="album-filters" hidden={!hasFilters}>
+        {series.length > 1 && (
+          <div class="filters__group">
+            <p class="eyebrow">系列</p>
+            <div class="filters__chips" role="group" aria-label="按系列筛选">
+              <button class="chip is-active" type="button" data-filter="series" data-value="all" aria-pressed="true">全部</button>
+              {series.map((s) => (
+                <button class="chip" type="button" data-filter="series" data-value={s} aria-pressed="false">
+                  {SERIES_LABELS[s]}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {years.length > 1 && (
+          <div class="filters__group">
+            <p class="eyebrow">年份</p>
+            <div class="filters__chips" role="group" aria-label="按年份筛选">
+              <button class="chip is-active" type="button" data-filter="year" data-value="all" aria-pressed="true">全部</button>
+              {years.map((y) => (
+                <button class="chip" type="button" data-filter="year" data-value={y} aria-pressed="false">{y}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {types.length > 1 && (
+          <div class="filters__group">
+            <p class="eyebrow">类型</p>
+            <div class="filters__chips" role="group" aria-label="按类型筛选">
+              <button class="chip is-active" type="button" data-filter="type" data-value="all" aria-pressed="true">全部</button>
+              {types.map((t) => (
+                <button class="chip" type="button" data-filter="type" data-value={t} aria-pressed="false">{t}</button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    }
+
+    <div class="grid-albums" id="album-grid">
+      {
+        /* 网格项 = 本页渲染的 .grid-albums__cell，Reveal 放在它**内部**。
+           这个顺序不能再换回来：hidden 必须打在真正的网格项上，见样式区注释。 */
+        albums.map((entry, i) => (
+          <div
+            class="grid-albums__cell"
+            data-series={seriesOf(entry.data.catalog)}
+            data-year={entry.data.releaseDate.slice(0, 4)}
+            data-type={entry.data.type}
+          >
+            <Reveal delay={i * 60}>
+              <AlbumCard
+                catalog={entry.data.catalog}
+                title={entry.data.title}
+                releaseDate={entry.data.releaseDate}
+                cover={entry.data.cover}
+                href={albumHref(entry.data.catalog)}
+                priority={i < 2}
+              />
+            </Reveal>
+          </div>
+        ))
+      }
+    </div>
+
+    <p class="empty" id="album-empty" hidden>没有符合这个条件的专辑。</p>
+
+    {
+      albums.length === 0 && (
+        <p class="empty">
+          作品数据还没接入。把专辑文件放进 <code>src/content/albums/</code> 即可，
+          也可以跑 <code>npm run fetch:album -- GKCD-010</code> 从 dizzylab 抓取。
+        </p>
+      )
+    }
+  </section>
+</BaseLayout>
+
+<script is:inline>
+  (function () {
+    var grid = document.getElementById('album-grid');
+    var filters = document.getElementById('album-filters');
+    var empty = document.getElementById('album-empty');
+    if (!grid || !filters || !empty) return;
+
+    var cells = Array.prototype.slice.call(grid.querySelectorAll('.grid-albums__cell'));
+    var state = { series: 'all', year: 'all', type: 'all' };
+
+    function apply() {
+      var shown = 0;
+      cells.forEach(function (cell) {
+        var ok =
+          (state.series === 'all' || cell.dataset.series === state.series) &&
+          (state.year === 'all' || cell.dataset.year === state.year) &&
+          (state.type === 'all' || cell.dataset.type === state.type);
+        // hidden 打在网格项自身，CSS 里配 display:none ——
+        // 网格项整个退出布局，后面的卡片会自动补位，不留空位
+        cell.hidden = !ok;
+        if (ok) shown += 1;
+      });
+      // 没有结果的提示，避免用户面对一片空白
+      empty.hidden = shown > 0;
+    }
+
+    filters.addEventListener('click', function (event) {
+      var btn = event.target.closest('.chip');
+      if (!btn) return;
+
+      var group = btn.dataset.filter;
+      state[group] = btn.dataset.value;
+
+      // 同组内只允许一个激活
+      filters.querySelectorAll('.chip[data-filter="' + group + '"]').forEach(function (el) {
+        var active = el === btn;
+        el.classList.toggle('is-active', active);
+        el.setAttribute('aria-pressed', String(active));
+      });
+
+      apply();
+    });
+  })();
+</script>
+
+<style>
+  /* 筛选条（.filters / .chip）与空状态提示（.empty）是全站共用的，
+     已提到 styles/global.css —— 曲目库用的是同一套，别在这里再写一份。 */
+
+  /* --- 网格 ---------------------------------------------------------------- */
+
+  .grid-albums {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: var(--s-8) var(--s-6);
+  }
+
+  /**
+   * 被筛掉的格子：hidden 属性 → display:none，网格项整个退出布局，
+   * 后面的卡片自动往前补位。
+   *
+   * ⚠️ 这条规则要求 hidden 打在「网格项自己」身上，而网格项必须是本页模板
+   * 渲染的元素。原因：Astro 的样式作用域标记只加在本页模板写的元素上，
+   * 组件（Reveal）渲染出的根元素带的是**组件自己**的标记 —— 页面样式
+   * 匹配不到它。所以曾经写成 `.grid-albums > :has(> .grid-albums__cell[hidden])`
+   * 想把外层一并收掉，编译出来是 `.grid-albums[cid] > [cid]:has(...)`，
+   * 那个 [cid] 永远不成立，规则静默失效：内层藏了、外层仍在占位，
+   * 于是筛掉的位置留下空洞，后面的卡片也不往前挪。
+   * 现在让网格项归本页所有（Reveal 挪进格子内部），一条规则就够，也不需要 :has()。
+   *
+   * 另：`.grid-albums__cell { display: grid }` 之类的作者样式优先级高于浏览器
+   * 默认的 `[hidden] { display: none }`，所以这条显式规则不是多余的。
+   */
+  .grid-albums__cell[hidden] {
+    display: none;
+  }
+
+  @media (max-width: 560px) {
+    .grid-albums {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--s-7) var(--s-4);
+    }
+  }
+</style>

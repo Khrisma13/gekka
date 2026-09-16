@@ -1,0 +1,155 @@
+---
+/**
+ * 联系 · /contact（REQUIREMENTS §2.8）
+ *
+ * 与 `/about#links`「链接聚合」的分工（见 DESIGN §21.7 / §22）：
+ *   · `/about#links` = 社团对外**露出的地方** —— 来听、来看、来聊天
+ *   · `/contact`     = 找我们**谈事情的地方** —— 委托、合作
+ * 两处形状相同却分开存，理由写在 lib/contacts.ts 的注释里。
+ *
+ * 两段内容的来源不同，与 /about 是同一套分法：
+ *   · 「合作与委托」是长文 → 集合 `pages` 的 contact.md
+ *     （改得勤的中文不进模板，否则改一句话要动组件）
+ *   · 「联系方式」是条目   → 集合 `contacts`，一条一个文件，卡片复用 LinkCard
+ *
+ * 顺序上**联系方式在前**：点进「联系」的人十有八九就是要那个地址，
+ * 不该先让他读四段说明。说明紧跟在下面，真要写委托的话自然会往下看。
+ */
+import { render } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import CopyScript from '../../components/CopyScript.astro';
+import LinkCard from '../../components/LinkCard.astro';
+import Reveal from '../../components/Reveal.astro';
+import { SITE, localePath } from '../../config/site';
+import { getContacts } from '../../lib/contacts';
+import { getPage } from '../../lib/pages';
+
+const policy = await getPage('contact');
+const { Content: PolicyBody } = await render(policy);
+
+const contacts = await getContacts();
+
+const absolute = (path: string) => new URL(localePath('zh', path), Astro.site ?? SITE.url).href;
+
+// 结构化数据：Organization 给一个稳定的 `@id`，与 /about 里那个是**同一个实体**
+// （两页各描述一遍、各给一份 name/url，搜索引擎只会当成两个组织去猜，见 DESIGN §22）。
+// contactPoint 只认**长得像邮箱的** handle —— 把群号当 email 报给搜索引擎是错的。
+const email = contacts
+  .map((entry) => entry.data.handle ?? '')
+  .find((value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value));
+
+const organization: Record<string, unknown> = {
+  '@type': 'Organization',
+  '@id': absolute('/#organization'),
+  name: SITE.name,
+  alternateName: SITE.nameLatin,
+  url: absolute('/'),
+};
+if (email) {
+  organization.contactPoint = {
+    '@type': 'ContactPoint',
+    email,
+    contactType: '合作与委托',
+    availableLanguage: ['zh-CN'],
+  };
+}
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'ContactPage',
+  name: `联系${SITE.name}`,
+  url: absolute('/contact/'),
+  inLanguage: 'zh-CN',
+  mainEntity: organization,
+};
+---
+
+<BaseLayout title="联系" description={`联系${SITE.name}：合作与委托的说明，以及联系方式。`}>
+  <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+
+  <!-- ================= 页头 =================
+       导语与 /about 的页头同构（eyebrow + 标题 + 一句导语），但**不给本页目录**：
+       这页只有两块，第二块就在第一块的下一屏，读者不会「为了找某块整页滚一遍」。 -->
+  <div class="container contact__head">
+    <p class="eyebrow">Contact</p>
+    <h1 class="contact__title">联系</h1>
+    <p class="contact__lead">委托、合作，或者只是想对我们说点什么 —— 从这里找到我们。</p>
+  </div>
+
+  <!-- ================= 联系方式 =================
+       放在最前面：点进这一页的人多半就是要这个地址。 -->
+  <section class="container section" id="channels">
+    <div class="section-head">
+      <h2 class="section-head__title">联系方式</h2>
+      <p class="section-head__note">{contacts.length} 个入口</p>
+    </div>
+
+    <div class="grid-links">
+      {
+        contacts.map((entry, i) => (
+          <Reveal delay={i * 70}>
+            <LinkCard link={entry.data} />
+          </Reveal>
+        ))
+      }
+    </div>
+
+    {
+      contacts.length === 0 && (
+        <p class="empty">
+          联系方式还没接入。在 <code>src/content/contacts/</code> 里放一个 <code>.md</code>
+          即可 —— 一个入口一个文件。
+        </p>
+      )
+    }
+  </section>
+
+  <!-- ================= 合作与委托 =================
+       标题由正文的 frontmatter 给（`policy.data.title`），页面不写第二遍。 -->
+  <section class="container section" id="commission">
+    <div class="section-head">
+      <h2 class="section-head__title">{policy.data.title}</h2>
+    </div>
+    <!-- 正文排版在 styles/global.css 的 .prose 里 ——
+         渲染出的 HTML 拿不到本页的作用域标记 -->
+    <div class="prose contact__body">
+      <PolicyBody />
+    </div>
+  </section>
+
+  <CopyScript />
+</BaseLayout>
+
+<style>
+  .contact__head {
+    padding-block: clamp(48px, 6vw, 88px) 0;
+  }
+
+  .contact__title {
+    margin-top: var(--s-4);
+    font-size: var(--text-h1);
+    font-weight: var(--w-light);
+    color: var(--ink-900);
+  }
+
+  .contact__lead {
+    margin-top: var(--s-5);
+    max-width: 46ch;
+    font-size: var(--text-body);
+    color: var(--ink-500);
+  }
+
+  /* 锚点给粘顶页头让位（页头 72px、窄屏 64px）。这一页没有页内目录，
+     但页脚、动态正文随时可能深链过来（`/contact#channels`），
+     留着这一手不吃亏 —— 漏了不报错，只会「点了有反应但标题压在导航下」。
+     ⚠ 新增区块记得往这串选择器里补 id。 */
+  #channels,
+  #commission {
+    scroll-margin-top: 80px;
+  }
+
+  /* 长文收进阅读舒适区（680px），左对齐不居中 —— 区块左边界要与其他区块对齐 */
+  .contact__body {
+    max-width: var(--w-text);
+  }
+</style>

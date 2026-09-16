@@ -1,0 +1,158 @@
+---
+/**
+ * 文章详情页 · /blog/<slug>/
+ *
+ * 结构：返回列表 / 日期·标签 / 标题 / 导语 / 封面（可选）/ 正文 / 上一篇·下一篇。
+ * 正文是文件的 Markdown 正文，排版共用 `styles/global.css` 的 `.prose`
+ * （动态、专辑简介也是它）。
+ *
+ * 正文列宽用 `--w-text`（680px，约 40 字/行）—— 长文阅读的舒适区，
+ * 比列表页的容器窄得多，这是刻意的：列表要横向铺开，正文要收窄。
+ */
+import { render } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Pager from '../../components/Pager.astro';
+import { SITE, asset, localePath } from '../../config/site';
+import { formatDate } from '../../lib/types';
+import { getPosts, neighboursOf, postHref, summaryOf } from '../../lib/posts';
+
+export async function getStaticPaths() {
+  const posts = await getPosts();
+  return posts.map((entry) => ({
+    params: { slug: entry.id },
+    props: { entry, posts },
+  }));
+}
+
+const { entry, posts } = Astro.props;
+const p = entry.data;
+const summary = summaryOf(entry);
+const { previous, next } = neighboursOf(posts, entry.id);
+const { Content } = await render(entry);
+
+const backHref = localePath('zh', '/blog/');
+const pageUrl = new URL(backHref + `${entry.id}/`, Astro.site ?? SITE.url).href;
+
+// 结构化数据：让搜索结果能出文章富摘要
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'BlogPosting',
+  headline: p.title,
+  datePublished: p.date,
+  inLanguage: 'zh-CN',
+  author: { '@type': 'Organization', name: SITE.name },
+  publisher: { '@type': 'Organization', name: SITE.name },
+  mainEntityOfPage: pageUrl,
+  ...(summary ? { description: summary } : {}),
+  ...(p.cover ? { image: new URL(asset(p.cover), Astro.site ?? SITE.url).href } : {}),
+};
+---
+
+<BaseLayout
+  title={p.title}
+  description={summary}
+  ogType="article"
+  {...(p.cover ? { ogImage: asset(p.cover) } : {})}
+>
+  <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+
+  <article class="container section post-page">
+    <a class="post-page__back" href={backHref}>← 杂谈</a>
+
+    <header class="post-page__head">
+      <p class="meta mono-num">{formatDate(p.date)}</p>
+      <h1 class="post-page__title">{p.title}</h1>
+      {summary && <p class="post-page__summary">{summary}</p>}
+      {
+        p.tags.length > 0 && (
+          <ul class="tag-list post-page__tags">
+            {p.tags.map((tag) => (
+              <li>{tag}</li>
+            ))}
+          </ul>
+        )
+      }
+    </header>
+
+    {
+      p.cover && (
+        <img class="post-page__cover" src={asset(p.cover)} alt="" decoding="async" />
+      )
+    }
+
+    <!-- 正文的排版在 styles/global.css 的 .prose 里 ——
+         渲染出的 HTML 拿不到本页的作用域标记 -->
+    <div class="prose post-page__body">
+      <Content />
+    </div>
+  </article>
+
+  <Pager
+    label="文章导航"
+    previous={previous && {
+      href: postHref(previous.id),
+      title: previous.data.title,
+      meta: formatDate(previous.data.date),
+    }}
+    next={next && {
+      href: postHref(next.id),
+      title: next.data.title,
+      meta: formatDate(next.data.date),
+    }}
+  />
+</BaseLayout>
+
+<style>
+  .post-page__back {
+    display: inline-block;
+    margin-bottom: var(--s-6);
+    font-size: var(--text-sm);
+    color: var(--ink-500);
+    transition: color var(--dur-fast) var(--ease);
+  }
+
+  .post-page__back:hover {
+    color: var(--accent);
+  }
+
+  /* 头部、封面、正文统一收进长文栏宽 —— 三者左边界必须对齐 */
+  .post-page__head,
+  .post-page__cover,
+  .post-page__body {
+    max-width: var(--w-text);
+  }
+
+  .post-page__title {
+    margin-top: var(--s-3);
+    font-size: var(--text-h1);
+    font-weight: var(--w-light);
+    line-height: var(--lh-heading);
+    color: var(--ink-900);
+    letter-spacing: var(--ls-tight);
+  }
+
+  /* 导语：摘要在这里兼作题记，比正文浅一档 */
+  .post-page__summary {
+    margin-top: var(--s-5);
+    font-size: var(--text-body);
+    color: var(--ink-500);
+    line-height: 1.7;
+  }
+
+  .post-page__tags {
+    margin-top: var(--s-5);
+  }
+
+  .post-page__cover {
+    display: block;
+    width: 100%;
+    height: auto;
+    margin-top: var(--s-7);
+    border: 1px solid var(--line-1);
+    border-radius: var(--r-md);
+  }
+
+  .post-page__body {
+    margin-top: var(--s-7);
+  }
+</style>

@@ -1,0 +1,302 @@
+---
+/**
+ * 关于 · /about（REQUIREMENTS M3）
+ *
+ * 把「社团简介」「成员」「链接聚合」「转载规约」四块合成一页 ——
+ * 参照同人音乐社团的常见做法：这些回答的都是「这个社团是什么」，
+ * 拆成多个栏目只会让导航变长、每页都很薄。联系方式不在这里（单独一个 `/contact`）。
+ *
+ * 四块内容的**来源刻意不同**，因为它们的形状不同：
+ *   · 简介与规约是长文 → 集合 `pages` 的两个 Markdown 文件，页面上是两段 `.prose`
+ *   · 成员是结构化条目 → 集合 `members`，一人一个文件，用卡片渲染
+ *   · 链接聚合是「一个平台一条」→ 集合 `links`，一个文件一条，卡片渲染
+ * 成员与链接都没有写成 Markdown 正文：卡片要的是「昵称 / 担当 / 外链」这类字段，
+ * 塞进段落里就得靠人肉排版，加一条还会排歪。
+ *
+ * 页首给了本页目录（简介 / 成员 / 链接聚合 / 规约）—— 合并页必须给跳转，
+ * 否则读者为了找规约要整页滚一遍。
+ */
+import { render } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import CopyScript from '../../components/CopyScript.astro';
+import LinkCard from '../../components/LinkCard.astro';
+import MemberCard from '../../components/MemberCard.astro';
+import Reveal from '../../components/Reveal.astro';
+import { SITE, asset, localePath } from '../../config/site';
+import { externalLinks, getLinks, groupLinks } from '../../lib/links';
+import { getMembers, groupMembers } from '../../lib/members';
+import { getPage } from '../../lib/pages';
+
+const biography = await getPage('biography');
+const terms = await getPage('terms');
+const { Content: BiographyBody } = await render(biography);
+const { Content: TermsBody } = await render(terms);
+
+const members = await getMembers();
+const groups = groupMembers(members);
+
+// 链接聚合：社媒账号与群组。与页脚「Elsewhere」是**同一份数据**（同一集合）——
+// 两处各存一份，迟早对不上（见 DESIGN §21.7）。
+const links = await getLinks();
+const linkGroups = groupLinks(links);
+
+/** 本页目录。id 必须与下面各区块的 `id` 对上 —— 锚点错了是静默的（点了没反应） */
+const TOC = [
+  { id: 'biography', label: '社团简介' },
+  { id: 'members', label: '成员' },
+  { id: 'links', label: '链接聚合' },
+  { id: 'terms', label: '转载规约' },
+];
+
+const absolute = (path: string) => new URL(localePath('zh', path), Astro.site ?? SITE.url).href;
+
+// 结构化数据：Organization 让「月華社 / Gekka Sound」成为可被搜索引用的实体，
+// 成员挂在它的 member 上。空数组不写进去 —— 宁可少一个字段，不要留一个空壳。
+// sameAs 只收**有 href 的**入口：群号不是 URL，塞进去会让实体信息出错。
+const socials = externalLinks(links);
+const organization: Record<string, unknown> = {
+  '@type': 'Organization',
+  name: SITE.name,
+  alternateName: SITE.nameLatin,
+  description: SITE.description.zh,
+  url: absolute('/'),
+  logo: new URL(asset('/brand/logo-mark.png'), Astro.site ?? SITE.url).href,
+};
+if (members.length > 0) {
+  organization.member = members.map((entry) => ({
+    '@type': 'Person',
+    name: entry.data.name,
+    jobTitle: entry.data.role,
+  }));
+}
+if (socials.length > 0) {
+  organization.sameAs = socials.map((s) => s.href);
+}
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'AboutPage',
+  name: `关于${SITE.name}`,
+  url: absolute('/about/'),
+  inLanguage: 'zh-CN',
+  mainEntity: organization,
+};
+---
+
+<BaseLayout
+  title="关于"
+  description={`${SITE.name} 的社团简介、成员名单、社媒与群组入口，以及作品的使用与转载规约。`}
+>
+  <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+
+  <!-- ================= 页头 =================
+       导语用社团 slogan（SITE 里的那一句，与首页主视觉、页脚同源）。
+       不用 SITE.description —— 那是给搜索结果的简介，和下面「社团简介」的首段
+       几乎同义，两个都放会读成重复。 -->
+  <div class="container about__head">
+    <p class="eyebrow">About</p>
+    <h1 class="about__title">关于</h1>
+    <p class="about__lead">{SITE.tagline.zh}</p>
+
+    <nav class="about__toc" aria-label="本页目录">
+      <ul>
+        {
+          TOC.map((item) => (
+            <li>
+              <a class="link-underline" href={`#${item.id}`}>
+                {item.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+  </div>
+
+  <!-- ================= 社团简介 ================= -->
+  <section class="container section" id="biography">
+    <div class="section-head">
+      <h2 class="section-head__title">{biography.data.title}</h2>
+    </div>
+    <!-- 正文排版在 styles/global.css 的 .prose 里 ——
+         渲染出的 HTML 拿不到本页的作用域标记 -->
+    <div class="prose about__body">
+      <BiographyBody />
+    </div>
+  </section>
+
+  <!-- ================= 成员 =================
+       分组顺序由 lib/members.ts 定（正式 → 合作 → 退出），空组不出现。 -->
+  <section class="container section" id="members">
+    <div class="section-head">
+      <h2 class="section-head__title">成员</h2>
+      <p class="section-head__note">{members.length} 人</p>
+    </div>
+
+    {
+      groups.map((group) => (
+        <div class="members__group">
+          {/* 正式那组不画分组标题：区块标题已经叫「成员」，而正式又是默认状态
+              （卡片上也不挂标记）。只有合作 / 退出这两类例外才需要一行标题 ——
+              顺带也让「只有一组正式成员」的情况不会出现两行「成员」。 */}
+          {group.status !== '正式' && <p class="eyebrow members__label">{group.label}</p>}
+
+          <div class="grid-members">
+            {group.items.map((entry, i) => (
+              <Reveal delay={i * 70}>
+                <MemberCard member={entry.data} />
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      ))
+    }
+
+    {
+      members.length === 0 && (
+        <p class="empty">
+          成员名单还没接入。在 <code>src/content/members/</code> 里放一个 <code>.md</code>
+          即可 —— 一名成员一个文件。
+        </p>
+      )
+    }
+  </section>
+
+  <!-- ================= 链接聚合 =================
+       社媒账号与群组（REQUIREMENTS §2.7）。与成员区三点相同、一点不同：
+       同 —— 分组顺序由 lib/links.ts 定、空组不出现、卡片走 Reveal；
+       不同 —— **每个分组都画标题**。成员那三组里「正式」是默认状态、多数派不用标，
+       而这三个分组是同级的，没有哪一类是默认的。 -->
+  <section class="container section" id="links">
+    <div class="section-head">
+      <h2 class="section-head__title">链接聚合</h2>
+      <p class="section-head__note">{links.length} 项</p>
+    </div>
+
+    {
+      linkGroups.map((bucket) => (
+        <div class="links__group">
+          <p class="eyebrow links__label">{bucket.group}</p>
+
+          <div class="grid-links">
+            {bucket.items.map((entry, i) => (
+              <Reveal delay={i * 70}>
+                <LinkCard link={entry.data} />
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      ))
+    }
+
+    {
+      links.length === 0 && (
+        <p class="empty">
+          入口还没接入。在 <code>src/content/links/</code> 里放一个 <code>.md</code>
+          即可 —— 一个平台（或一个群）一个文件。
+        </p>
+      )
+    }
+  </section>
+
+  <!-- ================= 转载规约 ================= -->
+  <section class="container section" id="terms">
+    <div class="section-head">
+      <h2 class="section-head__title">{terms.data.title}</h2>
+    </div>
+    <div class="prose about__body">
+      <TermsBody />
+    </div>
+  </section>
+
+  <!-- 复制账号 / 群号的接线（按钮由 LinkCard 渲染）。逻辑在 components/CopyScript.astro 里，
+       /about 与 /contact 共用同一段 —— 改一处两页一起生效。 -->
+  <CopyScript />
+</BaseLayout>
+
+<style>
+  .about__head {
+    padding-block: clamp(48px, 6vw, 88px) 0;
+  }
+
+  .about__title {
+    margin-top: var(--s-4);
+    font-size: var(--text-h1);
+    font-weight: var(--w-light);
+    color: var(--ink-900);
+  }
+
+  .about__lead {
+    margin-top: var(--s-5);
+    max-width: 46ch;
+    font-size: var(--text-body);
+    color: var(--ink-500);
+  }
+
+  /* --- 本页目录 -----------------------------------------------------------
+     四块内容并在一页，跳转是必需品。做成一排文字而不是「卡片式分栏」：
+     它是导航，不是内容，不该比正文更显眼。 */
+  .about__toc {
+    margin-top: var(--s-8);
+    border-top: 1px solid var(--line-1);
+    border-bottom: 1px solid var(--line-1);
+  }
+
+  .about__toc ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-3) var(--s-7);
+    padding-block: var(--s-4);
+  }
+
+  /* 覆盖 .link-underline 的默认墨色：目录是次要元素，比正文轻一档 */
+  .about__toc a {
+    font-size: var(--text-sm);
+    letter-spacing: var(--ls-wide-sm);
+    color: var(--ink-500);
+  }
+
+  .about__toc a:hover {
+    color: var(--ink-900);
+  }
+
+  /* --- 锚点给粘顶页头让位 -------------------------------------------------
+     页头高 72px（窄屏 64px），不留这一手，跳过去标题会被压在导航下面 ——
+     而这是「点了有反应、但看不全」的那种问题，很容易被当成没生效。
+     ⚠ 新增区块必须在下面这一串里补上自己的 id。 */
+  #biography,
+  #members,
+  #links,
+  #terms {
+    scroll-margin-top: 80px;
+  }
+
+  /* 两段长文收进阅读舒适区（680px）。左对齐，不居中 ——
+     区块左边界要与其他区块对齐，居中的话页面会显得散。 */
+  .about__body {
+    max-width: var(--w-text);
+  }
+
+  /* --- 区块内的分组标题（成员按状态、链接按类别，共用一套） ----------------- */
+  .members__group + .members__group,
+  .links__group + .links__group {
+    margin-top: var(--s-8);
+  }
+
+  .members__label,
+  .links__label {
+    display: block;
+    padding-bottom: var(--s-3);
+    margin-bottom: var(--s-6);
+    border-bottom: 1px solid var(--line-1);
+  }
+
+  /* --- 成员 ---------------------------------------------------------------- */
+  /* min(100%, 300px) 而不是光写 300px：容器比 300px 还窄时（极窄屏），
+     裸的 minmax 会撑出一个 300px 的轨道，整页横向溢出。 */
+  .grid-members {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+    gap: var(--s-7) var(--s-8);
+  }
+</style>

@@ -1,0 +1,70 @@
+/* ==========================================================================
+   溢出文字的悬停滚动（通用机制）
+   --------------------------------------------------------------------------
+   表格类长列表（专辑页曲目表、曲目库）里，文字比格子长时不能只给省略号 ——
+   曲名、原曲与出处、编曲者正是这些表里最该被看清的信息。
+   做法：默认右侧渐隐提示「还有更多」，鼠标悬停时自动横向滚动展示全文。
+
+   结构（两层，缺一不可）：
+
+     <span class="… clip" title="完整文字">
+       <span class="clip-inner">完整文字</span>
+     </span>
+
+   外层负责裁切（overflow: hidden），内层宽度等于完整文字，动画作用在内层
+   transform 上（合成器动画，不触发重排）。**内层那个 span 不能省**：
+   省略号与 text-indent 两条路都试过、实测失效，见 DESIGN.md §16。
+
+   为什么是全局样式而不是某个组件的 scoped 样式：
+   同一套机制现在有三个消费者（TrackList、曲目库索引表、以及往后任何长表），
+   scoped 样式会把它复制三份。测量脚本也只在 BaseLayout 里挂一次。
+
+   作用域与覆盖关系：本文件的规则特指度都很低（.clip / .clip-inner），
+   页面或组件里写的 scoped 规则（编译后带 [cid] 属性选择器）天然胜过它们 ——
+   所以窄屏要「不裁切、改换行」时，在各自的地盘上覆盖即可，不需要 !important。
+   ========================================================================== */
+
+.clip {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.clip-inner {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+/* 溢出时右侧渐隐，代替省略号提示「还有更多」。
+   （内层是 inline-block，text-overflow: ellipsis 对它不生效，遮罩是替代方案。） */
+.clip[data-overflow] {
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 22px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 22px), transparent 100%);
+}
+
+/* 悬停：撤掉遮罩，内层开始滚动。alternate 往返 —— 滚到头再滚回来，
+   头尾都能看清，也不需要复制文本做无缝循环。 */
+.clip[data-overflow]:hover {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.clip[data-overflow]:hover > .clip-inner {
+  animation: clip-scroll-x var(--scroll-dur, 6s) linear infinite alternate;
+}
+
+@keyframes clip-scroll-x {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-1 * var(--scroll-dist, 0px)));
+  }
+}
+
+/* 系统开启「减少动态效果」时不滚动；遮罩仍在（提示「还有更多」），
+   元素上的 title 属性作为原生 tooltip 兜底看全文。 */
+@media (prefers-reduced-motion: reduce) {
+  .clip[data-overflow]:hover > .clip-inner {
+    animation: none;
+  }
+}

@@ -1,0 +1,113 @@
+---
+/**
+ * 首页的进场遮罩（「进入网站」的加载动效）。
+ *
+ * 版式与手法参照 logical-emotion.com / jizue.com 的首屏：**满屏纸色 + 一个极小的
+ * 居中指示物，等文档就绪再淡出**，主视觉的文字随后错开浮上来（错开在 index.astro）。
+ * 与两处参考不同的只有指示物本身 —— 不做跳动的点：那是通用 loading 的语汇，
+ * 与「清冷极简」不搭。改成**一条 1px 的弧长成一整圈**，弧就是「月」的轮廓。
+ *
+ * 这个组件只管三件事：标记、退场、以及与样式的接头（样式在 global.css）。
+ * **「这次要不要出现」不在这里** —— 那必须在首帧之前定下来，只有 head 里的同步脚本
+ * 做得到，见 components/BaseHead.astro 的 intro 分支。两边靠 html 上的 data-intro 接头：
+ *   · 没设   → 本次不播（禁用 JS / 减少动态效果 / 本会话已进过站），下面这段脚本直接收工；
+ *   · 'in'   → 亮着，弧正在画；
+ *   · 'out'  → 退场。这一步是**三拍**（参数全在 global.css 那一节里）：
+ *               ① 指示物散开（弧与名，380ms）；
+ *               ② 纸面延后 240ms 开始揭，460ms 揭完；
+ *               ③ 主视觉在同一时间上浮（在 index.astro 的 hero），最后一件略晚于纸面。
+ *             三拍都由 CSS 按 data-intro 自己走，脚本只负责**在合适的时刻把它翻过去**、
+ *             以及走完之后摘掉节点。
+ *
+ * 只在首页挂。落点由 BaseLayout 的 overlay 插槽给（body 末尾、页面切换幕布之前）。
+ */
+import { SITE } from '../config/site';
+---
+
+<div class="intro" aria-hidden="true">
+  <div class="intro__stack">
+    <svg class="intro__moon" viewBox="0 0 48 48" width="48" height="48" aria-hidden="true">
+      <circle class="intro__ring" cx="24" cy="24" r="22" pathLength="1" />
+    </svg>
+    <p class="intro__name">{SITE.name}</p>
+    <p class="intro__latin">{SITE.nameLatin}</p>
+  </div>
+</div>
+
+<script is:inline>
+  /**
+   * 进场遮罩的退场。
+   *
+   * **两个条件都满足才退**：文档已就绪（load）、且遮罩已经亮了至少 MIN_MS。
+   * 只等 load 不行 —— 本地缓存命中时它来得太快，遮罩闪一下就没，比不做更廉价；
+   * 只等固定时长又会让慢网络下的人干等。
+   *
+   * MIN_MS 由样式现推（弧画完 + 停一下），**不写死**：从前这里写的是 700ms，
+   * 比弧自己的 1000ms 还短 —— 本地打开时 load 几乎立刻就到，弧会被切在七成处，
+   * 那一下就是「接缝」。节奏只有一个真源，在 global.css。
+   *
+   * 再加一道 MAX_MS 兜底：load 迟迟不来（图挂住、外链被墙）也不能把人锁在遮罩里。
+   */
+  (function () {
+    var root = document.documentElement;
+    var el = document.querySelector('.intro');
+    if (!el) return;
+    // 门禁没过（data-intro 没设）就是本次不播，这里没有要做的事
+    if (!root.dataset.intro) return;
+
+    // 节奏全从样式现读 —— global.css「首页进场遮罩」那一节是唯一真源，
+    // 与 BaseLayout 的出场脚本读 --dur-fast 是同一套做法。
+    //
+    // ⚠ **别写成 parseFloat(...) || 兜底 就完事**（第一版就是这么写的，构建产物里全线失准）：
+    // 自定义属性取回来的是**「写出来的那个字符串」**，而构建时的压缩器会把 200ms 压成 .2s、
+    // 1000ms 压成 1s。parseFloat('.2s') 得到 0.2 —— 当成毫秒用就差了一千倍。后果不是报错，
+    // 是「最短显示时长」缩到 1.2ms、摘节点时限缩到 0.6ms：弧刚起笔就被退场，纸面淡到一半
+    // 被抽掉（那一下就是接缝）。所以按单位算，而且这个是 dev 下永远看不见的坑。
+    var css = getComputedStyle(root);
+    function msOf(name, fallback) {
+      var v = css.getPropertyValue(name).trim();
+      var n = parseFloat(v);
+      if (!isFinite(n)) return fallback;
+      return v.indexOf('ms') > -1 ? n : n * 1000;
+    }
+
+    var MIN_MS = msOf('--intro-ring-dur', 1000) + msOf('--intro-hold', 200);
+    var MAX_MS = 2600;
+    // 摘节点要等「纸面延迟 + 纸面揭开」两段都走完，否则会当场把还在淡的纸面抽掉
+    var OUT_MS = msOf('--intro-veil-delay', 240) + msOf('--intro-veil-dur', 460);
+
+    var minDone = false;
+    var loaded = false;
+    var gone = false;
+
+    function dismiss() {
+      if (gone) return;
+      gone = true;
+      // 标记**只改不删**：主视觉的错开上浮由 html[data-intro='out'] 这条选择器驱动，
+      // 删掉属性会让正在跑的动画当场中断、元素跳回终态。留着，它只是一个「本页进场
+      // 已经播过」的说明，没有别的副作用（遮罩节点自己会被摘掉）。
+      root.dataset.intro = 'out';
+      setTimeout(function () {
+        el.remove();
+      }, OUT_MS + 60);
+    }
+
+    function tryDismiss() {
+      if (minDone && loaded) dismiss();
+    }
+
+    setTimeout(function () {
+      minDone = true;
+      tryDismiss();
+    }, MIN_MS);
+
+    function onLoad() {
+      loaded = true;
+      tryDismiss();
+    }
+    if (document.readyState === 'complete') onLoad();
+    else addEventListener('load', onLoad);
+
+    setTimeout(dismiss, MAX_MS);
+  })();
+</script>

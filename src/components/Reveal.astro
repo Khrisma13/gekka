@@ -1,0 +1,19 @@
+---
+/**
+ * 滚动进入淡入包装。
+ * 未启用 JS 时内容默认可见（见 global.css 的 html.js 规则），不做渐进增强陷阱。
+ */
+interface Props {
+  /** 同一组内错开出现的序号，用于制造轻微的依次感 */
+  delay?: number;
+  as?: string;
+  class?: string;
+}
+
+const { delay = 0, as: Tag = 'div', class: className = '' } = Astro.props;
+const style = delay ? `transition-delay:${delay}ms` : undefined;
+---
+
+<Tag class:list={['reveal', className]} style={style}>
+  <slot />
+</Tag>

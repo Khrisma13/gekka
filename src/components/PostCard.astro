@@ -1,0 +1,134 @@
+---
+/**
+ * 杂谈文章卡片（列表视图）。
+ * 有封面时缩略图在左、文字在右，适合连续阅读的长列表。
+ *
+ * **没有封面时不出现缩略图列**（加 `post--plain`，由服务端判定）。
+ * 原先无封面会渲染一个「封面待补」占位框 —— 一屏看下来全是同样大小的灰框，
+ * 比没有图更难看。文章配图本来就该是可选的，版式不该为它留一个空位。
+ *
+ * 字段平铺而不是整条 entry 传进来：与 `AlbumCard` 保持同一种调用风格，
+ * 首页、列表页、样张页三处都能直接拼。
+ */
+import { formatDate } from '../lib/types';
+import { asset } from '../config/site';
+
+interface Props {
+  title: string;
+  /** ISO 日期 */
+  date: string;
+  href: string;
+  /** 一句话摘要 —— 列表页「外显」的正文，由调用方决定手写还是自动抽取 */
+  summary?: string;
+  /** public/ 下的封面路径，没有就不出图位 */
+  cover?: string;
+  tags?: readonly string[];
+}
+
+const { title, date, href, summary, cover, tags = [] } = Astro.props;
+---
+
+<article class:list={['post', { 'post--plain': !cover }]}>
+  <a class="post__link" href={href}>
+    {
+      cover && (
+        <div class="post__thumb">
+          <img
+            src={asset(cover)}
+            alt=""
+            width="320"
+            height="200"
+            loading="lazy"
+            decoding="async"
+          />
+        </div>
+      )
+    }
+
+    <div class="post__body">
+      <p class="meta mono-num">{formatDate(date)}</p>
+      <h3 class="post__title">{title}</h3>
+      {summary && <p class="post__excerpt">{summary}</p>}
+      {
+        tags.length > 0 && (
+          <ul class="tag-list post__tags">
+            {tags.map((tag) => (
+              <li>{tag}</li>
+            ))}
+          </ul>
+        )
+      }
+    </div>
+  </a>
+</article>
+
+<style>
+  .post + .post {
+    border-top: 1px solid var(--line-1);
+  }
+
+  .post__link {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: var(--s-6);
+    padding-block: var(--s-6);
+    align-items: start;
+  }
+
+  /* 无封面：收成单列。卡片左边界与页面标题对齐，不留空的图位 */
+  .post--plain .post__link {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .post__thumb {
+    position: relative;
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+    background: var(--paper-100);
+    border: 1px solid var(--line-1);
+    border-radius: var(--r-md);
+  }
+
+  .post__thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform var(--dur-slow) var(--ease);
+  }
+
+  .post__link:hover .post__thumb img {
+    transform: scale(1.03);
+  }
+
+  .post__title {
+    margin-top: var(--s-3);
+    font-size: var(--text-h3);
+    font-weight: var(--w-regular);
+    color: var(--ink-900);
+    transition: color var(--dur-fast) var(--ease);
+  }
+
+  .post__link:hover .post__title {
+    color: var(--accent);
+  }
+
+  .post__excerpt {
+    margin-top: var(--s-3);
+    font-size: var(--text-sm);
+    color: var(--ink-500);
+    line-height: var(--lh-tight);
+    max-width: 62ch;
+  }
+
+  /* 胶囊本身的样式在 global.css 的 .tag-list 里（文章详情页共用同一套） */
+  .post__tags {
+    margin-top: var(--s-4);
+  }
+
+  @media (max-width: 700px) {
+    .post__link {
+      grid-template-columns: 1fr;
+      gap: var(--s-4);
+    }
+  }
+</style>

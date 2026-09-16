@@ -1,0 +1,457 @@
+---
+/**
+ * 专辑详情页 · /albums/<编号>/
+ *
+ * 页面结构：
+ *   封面大图 / 标题·编号 / 发布日·类型·时长 / 简介 / 曲目表 /
+ *   Staff / 上一张·下一张
+ *
+ * 页面上不出现价格 —— 定价随汇率与渠道变动，写在专辑页上只会过期。
+ *
+ * 试听与购买不再单列区块 —— 头部那两颗按钮就是出口（试听走 B 站、购买走 dizzylab）。
+ * 渠道目前只接 dizzylab 一家，专门为它铺一个「试听与购买」版块不划算。
+ *
+ * 数据全部来自内容集合，这个文件里没有任何硬编码的专辑信息。
+ */
+import { render } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Button from '../../components/Button.astro';
+import TrackList from '../../components/TrackList.astro';
+import Pager from '../../components/Pager.astro';
+import SeriesTag from '../../components/SeriesTag.astro';
+import { SITE } from '../../config/site';
+import { formatDate } from '../../lib/types';
+import { coverSrcset, coverUrl } from '../../lib/media';
+import {
+  albumHref,
+  getAlbums,
+  neighboursOf,
+  toIsoDuration,
+  type AlbumEntry,
+} from '../../lib/albums';
+
+export async function getStaticPaths() {
+  const albums = await getAlbums();
+  return albums.map((entry) => ({
+    params: { catalog: entry.data.catalog },
+    props: { entry, albums },
+  }));
+}
+
+interface Props {
+  entry: AlbumEntry;
+  albums: AlbumEntry[];
+}
+
+const { entry, albums } = Astro.props;
+const a = entry.data;
+
+const { previous, next } = neighboursOf(albums, a.catalog);
+
+// 主操作：优先 B 站试听，没有就退到 dizzylab
+const listenHref = a.links.bilibili ?? a.links.dizzylab;
+const listenLabel = a.links.bilibili ? '试听' : '查看作品页';
+
+// 购买渠道：在售的排前面，售罄的靠后并标注。
+// 目前只接 dizzylab，保留排序是为了日后加 Booth / 蜜瓜时不用改这里。
+const stores = Object.entries(a.stores)
+  .map(([key, v]) => ({ key, ...v }))
+  .sort((x, y) => Number(y.inStock) - Number(x.inStock));
+
+const trackTotal = a.tracks.length;
+const totalSeconds = a.tracks.reduce((sum, t) => {
+  const m = t.duration?.match(/^(\d{1,2}):(\d{2})$/);
+  return m ? sum + Number(m[1]) * 60 + Number(m[2]) : sum;
+}, 0);
+const totalDuration = totalSeconds
+  ? `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`
+  : undefined;
+
+const { Content } = await render(entry);
+
+// 结构化数据：让搜索结果能出音乐富摘要
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'MusicAlbum',
+  name: a.title,
+  ...(a.titleAlt ? { alternateName: a.titleAlt } : {}),
+  ...(a.releaseDate ? { datePublished: a.releaseDate } : {}),
+  ...(a.cover ? { image: new URL(coverUrl(a.cover, 1200)!, Astro.site ?? SITE.url).href } : {}),
+  ...(a.summary ? { description: a.summary } : {}),
+  albumProductionType: 'https://schema.org/StudioAlbum',
+  byArtist: { '@type': 'MusicGroup', name: SITE.name },
+  ...(trackTotal ? { numTracks: trackTotal } : {}),
+  ...(a.tracks.length
+    ? {
+        track: a.tracks.map((t) => ({
+          '@type': 'MusicRecording',
+          name: t.title,
+          position: t.no,
+          ...(toIsoDuration(t.duration) ? { duration: toIsoDuration(t.duration) } : {}),
+          ...(t.original
+            ? {
+                recordingOf: {
+                  '@type': 'MusicComposition',
+                  name: t.original,
+                },
+              }
+            : {}),
+        })),
+      }
+    : {}),
+  ...(listenHref ? { url: listenHref } : {}),
+};
+---
+
+<BaseLayout
+  title={`${a.title}（${a.catalog}）`}
+  description={a.summary ?? SITE.description.zh}
+  ogType="music.album"
+  ogImage={coverUrl(a.cover, 1200)}
+>
+  <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+
+  <article class="album">
+    <!-- ================= 头部：封面 + 基本信息 ================= -->
+    <header class="album__head container">
+      <div class="album__cover">
+        {
+          a.cover ? (
+            <img
+              src={coverUrl(a.cover, 1200)}
+              srcset={coverSrcset(a.cover)}
+              sizes="(max-width: 860px) 92vw, 460px"
+              alt={`《${a.title}》封面`}
+              width="1200"
+              height="1200"
+              loading="eager"
+              decoding="async"
+              fetchpriority="high"
+            />
+          ) : (
+            <span class="placeholder album__cover-placeholder">{a.catalog}</span>
+          )
+        }
+      </div>
+
+      <div class="album__intro">
+        <p class="album__eyebrow">
+          <span class="eyebrow">{a.catalog}</span>
+          <SeriesTag catalog={a.catalog} long />
+        </p>
+
+        <h1 class="album__title">{a.title}</h1>
+        {a.titleAlt && <p class="album__title-alt">{a.titleAlt}</p>}
+        {a.subtitle && <p class="album__subtitle">{a.subtitle}</p>}
+
+        {a.summary && <p class="album__summary">{a.summary}</p>}
+
+        <dl class="facts">
+          <div class="facts__row">
+            <dt>发布</dt>
+            <dd class="mono-num">{formatDate(a.releaseDate)}</dd>
+          </div>
+          <div class="facts__row">
+            <dt>类型</dt>
+            <dd>{a.type}</dd>
+          </div>
+          {
+            totalDuration && (
+              <div class="facts__row">
+                <dt>时长</dt>
+                <dd class="mono-num">
+                  {trackTotal} 曲 · {totalDuration}
+                </dd>
+              </div>
+            )
+          }
+        </dl>
+
+        <div class="album__actions">
+          {listenHref && <Button href={listenHref} variant="primary">{listenLabel}</Button>}
+          {
+            stores[0] && (
+              <Button href={stores[0].url} variant="ghost">
+                {stores[0].inStock ? '购买' : '查看'}
+              </Button>
+            )
+          }
+        </div>
+
+        {
+          a.tags.length > 0 && (
+            <ul class="tags">
+              {a.tags.map((tag) => (
+                <li class="tags__item">{tag}</li>
+              ))}
+            </ul>
+          )
+        }
+      </div>
+    </header>
+
+    <!-- ================= 曲目表 ================= -->
+    {
+      a.tracks.length > 0 && (
+        <section class="container section" id="tracks">
+          <div class="section-head">
+            <h2 class="section-head__title">曲目</h2>
+            <p class="section-head__note">
+              {trackTotal} 曲{totalDuration && ` · ${totalDuration}`}
+            </p>
+          </div>
+          <TrackList tracks={a.tracks} />
+        </section>
+      )
+    }
+
+    <!-- ================= 简介正文 ================= -->
+    {
+      entry.body?.trim() && (
+        <section class="container section" id="about">
+          <div class="section-head">
+            <h2 class="section-head__title">关于这张作品</h2>
+          </div>
+          <div class="album__desc prose">
+            <Content />
+          </div>
+        </section>
+      )
+    }
+
+    <!-- ================= Staff ================= -->
+    {
+      a.credits.length > 0 && (
+        <section class="container section" id="staff">
+          <div class="section-head">
+            <h2 class="section-head__title">Staff</h2>
+          </div>
+          <dl class="staff">
+            {a.credits.map((c) => (
+              <div class="staff__row">
+                <dt class="staff__role">{c.role}</dt>
+                <dd class="staff__name">
+                  {c.link ? (
+                    <a class="link-underline" href={c.link} target="_blank" rel="noopener noreferrer">
+                      {c.name}
+                    </a>
+                  ) : (
+                    c.name
+                  )}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )
+    }
+
+    <!-- ================= 上一张 / 下一张 ================= -->
+    <Pager
+      label="专辑导航"
+      previousLabel="上一张"
+      nextLabel="下一张"
+      previous={previous && {
+        href: albumHref(previous.data.catalog),
+        title: previous.data.title,
+        meta: previous.data.catalog,
+      }}
+      next={next && {
+        href: albumHref(next.data.catalog),
+        title: next.data.title,
+        meta: next.data.catalog,
+      }}
+    />
+  </article>
+</BaseLayout>
+
+<style>
+  /* --- 头部 ---------------------------------------------------------------- */
+
+  .album__head {
+    display: grid;
+    grid-template-columns: minmax(0, 460px) minmax(0, 1fr);
+    gap: clamp(32px, 5vw, 72px);
+    align-items: start;
+    padding-block: clamp(40px, 6vw, 80px) 0;
+  }
+
+  .album__cover {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    background: var(--paper-100);
+    border: 1px solid var(--line-1);
+    border-radius: var(--r-md);
+  }
+
+  .album__cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .album__cover-placeholder {
+    position: absolute;
+    inset: 0;
+    border: none;
+    letter-spacing: var(--ls-wide);
+  }
+
+  .album__intro {
+    padding-top: var(--s-2);
+  }
+
+  /* 编号与系列标记同一行。标记比编号矮一档，靠 align-items: baseline 对齐 */
+  .album__eyebrow {
+    display: flex;
+    align-items: baseline;
+    gap: var(--s-3);
+    flex-wrap: wrap;
+  }
+
+  .album__title {
+    margin-top: var(--s-4);
+    font-size: var(--text-h1);
+    font-weight: var(--w-light);
+    letter-spacing: var(--ls-normal);
+  }
+
+  .album__title-alt {
+    margin-top: var(--s-2);
+    font-size: var(--text-sm);
+    color: var(--ink-400);
+    letter-spacing: var(--ls-wide-sm);
+  }
+
+  .album__subtitle {
+    margin-top: var(--s-3);
+    font-size: var(--text-h3);
+    font-weight: var(--w-light);
+    color: var(--ink-500);
+  }
+
+  .album__summary {
+    margin-top: var(--s-5);
+    max-width: 42ch;
+    color: var(--ink-600);
+  }
+
+  /* --- 基本信息表 ----------------------------------------------------------- */
+
+  .facts {
+    margin-top: var(--s-7);
+    border-top: 1px solid var(--line-1);
+    max-width: 42ch;
+  }
+
+  .facts__row {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: var(--s-4);
+    padding-block: var(--s-3);
+    border-bottom: 1px solid var(--line-1);
+  }
+
+  .facts dt {
+    font-size: var(--text-sm);
+    color: var(--ink-400);
+  }
+
+  .facts dd {
+    font-size: var(--text-sm);
+    color: var(--ink-700);
+  }
+
+  /* --- 操作按钮 ------------------------------------------------------------ */
+
+  .album__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-3);
+    margin-top: var(--s-7);
+  }
+
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-2);
+    margin-top: var(--s-6);
+  }
+
+  .tags__item {
+    font-size: var(--text-meta);
+    letter-spacing: var(--ls-wide-sm);
+    color: var(--ink-500);
+    background: var(--paper-100);
+    border-radius: var(--r-sm);
+    padding: 3px 9px;
+  }
+
+  /* --- 简介正文 ------------------------------------------------------------ */
+
+  .album__desc {
+    max-width: var(--w-text);
+    color: var(--ink-700);
+  }
+
+  .album__desc :global(p) + :global(p) {
+    margin-top: var(--s-5);
+  }
+
+  .album__desc :global(em) {
+    font-style: italic;
+  }
+
+  /* --- Staff --------------------------------------------------------------- */
+
+  .staff {
+    max-width: var(--w-text);
+    border-top: 1px solid var(--line-1);
+  }
+
+  .staff__row {
+    display: grid;
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: var(--s-5);
+    padding-block: var(--s-4);
+    border-bottom: 1px solid var(--line-1);
+    align-items: baseline;
+  }
+
+  .staff__role {
+    font-size: var(--text-sm);
+    color: var(--ink-400);
+    letter-spacing: var(--ls-wide-sm);
+  }
+
+  .staff__name {
+    color: var(--ink-900);
+    font-size: var(--text-body);
+  }
+
+  /* --- 窄屏 ---------------------------------------------------------------- */
+
+  @media (max-width: 860px) {
+    .album__head {
+      grid-template-columns: 1fr;
+      gap: var(--s-7);
+    }
+
+    .album__cover {
+      max-width: 460px;
+    }
+
+    .facts,
+    .album__summary {
+      max-width: none;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .staff__row {
+      grid-template-columns: 1fr;
+      gap: var(--s-2);
+    }
+  }
+</style>

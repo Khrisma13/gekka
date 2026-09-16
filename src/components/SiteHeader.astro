@@ -1,0 +1,274 @@
+---
+import { NAV, SITE, asset, localePath, type Locale } from '../config/site';
+
+interface Props {
+  locale?: Locale;
+}
+
+const { locale = 'zh' } = Astro.props;
+
+// 动态（news）仅中文站提供
+const items = NAV.filter((item) => !(item.zhOnly && locale !== 'zh'));
+
+const currentPath = Astro.url.pathname;
+const isActive = (href: string) => currentPath.replace(/\/$/, '').endsWith(href);
+
+// 搜索不在 NAV 里：NAV 是「内容地图」（栏目），搜索是工具 —— 混进去会让导航变成
+// 七项，而且它没有「当前栏目」这回事。所以这里单独判一次激活态。
+const isSearch = isActive('/search');
+
+// 语言切换（LangSwitch）暂时摘掉：日文 / 英文页面还没有做出来，
+// 留着 ZH / JA / EN 三个字母只会点出 404。多语言版本搁置期间先隐藏，
+// 组件本身与 localePath() 都保留着，日后恢复只需把 <LangSwitch /> 放回来。
+---
+
+<header class="header" id="site-header">
+  <div class="container header__inner">
+    <a class="brand" href={localePath(locale, '/')} aria-label={SITE.name}>
+      <img
+        class="brand__mark"
+        src={asset('/brand/logo-mark.png')}
+        alt=""
+        width="31"
+        height="28"
+        aria-hidden="true"
+      />
+      <span class="brand__text">
+        <span class="brand__name">{SITE.name}</span>
+        <span class="brand__latin">{SITE.nameLatin}</span>
+      </span>
+    </a>
+
+    <nav class="nav" aria-label="主导航">
+      <ul class="nav__list">
+        {
+          items.map((item) => (
+            <li>
+              <a
+                class:list={['nav__link', { 'is-active': isActive(item.href) }]}
+                href={localePath(locale, item.href)}
+              >
+                {item.label[locale]}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+
+    <div class="header__tail">
+      <!-- 站内搜索入口。放页头尾巴（右侧）而不是主导航里，理由见上；窄屏也留着 ——
+           手机上更靠它找东西，而那里本来就只有一颗汉堡按钮。 -->
+      <a
+        class:list={['nav__link', { 'is-active': isSearch }]}
+        href={localePath(locale, '/search/')}
+      >
+        搜索
+      </a>
+
+      <button
+        class="menu-toggle"
+        type="button"
+        aria-expanded="false"
+        aria-controls="mobile-nav"
+      >
+        <span class="sr-only">菜单</span>
+        <span class="menu-toggle__bar" aria-hidden="true"></span>
+        <span class="menu-toggle__bar" aria-hidden="true"></span>
+      </button>
+    </div>
+  </div>
+
+  <div class="mobile-nav" id="mobile-nav" hidden>
+    <ul>
+      {
+        items.map((item) => (
+          <li>
+            <a href={localePath(locale, item.href)}>{item.label[locale]}</a>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</header>
+
+<style>
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: color-mix(in srgb, var(--paper-50) 88%, transparent);
+    backdrop-filter: saturate(180%) blur(12px);
+    border-bottom: 1px solid var(--line-1);
+  }
+
+  .header__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s-5);
+    height: 72px;
+  }
+
+  /* --- 标志 ---------------------------------------------------------------- */
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+    color: var(--ink-900);
+    flex-shrink: 0;
+  }
+
+  /* 徽记是社团正式标志（月 + 兔 + 云），由 npm run brand 从母版裁边生成。
+     只给高度不给宽度，避免比例被拉变形。 */
+  .brand__mark {
+    display: block;
+    height: 28px;
+    width: auto;
+    flex-shrink: 0;
+  }
+
+  .brand__text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+  }
+
+  .brand__name {
+    font-size: 15px;
+    font-weight: var(--w-medium);
+    letter-spacing: 0.1em;
+  }
+
+  .brand__latin {
+    font-size: 9px;
+    letter-spacing: 0.28em;
+    color: var(--ink-400);
+    margin-top: 2px;
+  }
+
+  /* --- 主导航 --- */
+  .nav__list {
+    display: flex;
+    align-items: center;
+    gap: clamp(16px, 2.4vw, 32px);
+  }
+
+  .nav__link {
+    position: relative;
+    font-size: var(--text-sm);
+    letter-spacing: var(--ls-wide-sm);
+    color: var(--ink-500);
+    padding-block: 4px;
+    white-space: nowrap;
+  }
+
+  .nav__link::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    height: 1px;
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform var(--dur) var(--ease);
+  }
+
+  .nav__link:hover {
+    color: var(--ink-900);
+  }
+
+  .nav__link:hover::after {
+    transform: scaleX(1);
+  }
+
+  .nav__link.is-active {
+    color: var(--ink-900);
+  }
+
+  .nav__link.is-active::after {
+    transform: scaleX(1);
+  }
+
+  .header__tail {
+    display: flex;
+    align-items: center;
+    gap: var(--s-5);
+    flex-shrink: 0;
+  }
+
+  /* --- 移动端菜单 --- */
+  .menu-toggle {
+    display: none;
+    width: 32px;
+    height: 32px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    margin-right: -6px;
+  }
+
+  .menu-toggle__bar {
+    display: block;
+    width: 18px;
+    height: 1px;
+    background: var(--ink-700);
+    transition: transform var(--dur) var(--ease), opacity var(--dur) var(--ease);
+  }
+
+  .menu-toggle[aria-expanded='true'] .menu-toggle__bar:first-child {
+    transform: translateY(3px) rotate(45deg);
+  }
+
+  .menu-toggle[aria-expanded='true'] .menu-toggle__bar:last-child {
+    transform: translateY(-3px) rotate(-45deg);
+  }
+
+  .mobile-nav {
+    border-top: 1px solid var(--line-1);
+    background: var(--paper-50);
+    padding: var(--s-3) var(--gutter) var(--s-5);
+  }
+
+  .mobile-nav[hidden] {
+    display: none;
+  }
+
+  .mobile-nav a {
+    display: block;
+    padding: var(--s-3) 0;
+    color: var(--ink-700);
+    font-size: var(--text-body);
+    border-bottom: 1px solid var(--line-1);
+  }
+
+  @media (max-width: 900px) {
+    .nav {
+      display: none;
+    }
+
+    .menu-toggle {
+      display: flex;
+    }
+
+    .header__inner {
+      height: 64px;
+    }
+  }
+</style>
+
+<script is:inline>
+  (function () {
+    var toggle = document.querySelector('.menu-toggle');
+    var panel = document.getElementById('mobile-nav');
+    if (!toggle || !panel) return;
+
+    toggle.addEventListener('click', function () {
+      var open = toggle.getAttribute('aria-expanded') === 'true';
+      toggle.setAttribute('aria-expanded', String(!open));
+      panel.hidden = open;
+    });
+  })();
+</script>

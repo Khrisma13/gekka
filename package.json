@@ -1,0 +1,30 @@
+{
+  "name": "gekka-site",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "月華社 · 同人音乐社团官方网站",
+  "scripts": {
+    "dev": "astro dev",
+    "prebuild": "node scripts/fix-tabs.mjs",
+    "build": "astro build && node scripts/check-glyphs.mjs",
+    "preview": "astro preview",
+    "fonts": "node scripts/fetch-fonts.mjs",
+    "fetch:album": "node scripts/fetch-dizzylab.mjs",
+    "covers": "node scripts/build-covers.mjs",
+    "oc": "node scripts/build-oc.mjs",
+    "og": "node scripts/build-og.mjs",
+    "brand": "node scripts/build-brand.mjs",
+    "new:album": "node scripts/new-album.mjs",
+    "new:news": "node scripts/new-news.mjs",
+    "new:post": "node scripts/new-post.mjs",
+    "styleguide": "node scripts/export-styleguide.mjs",
+    "preview:album": "node scripts/export-preview.mjs",
+    "check:glyphs": "node scripts/check-glyphs.mjs --strict",
+    "fix:tabs": "node scripts/fix-tabs.mjs"
+  },
+  "dependencies": {
+    "astro": "^7.3.2",
+    "js-yaml": "^4.3.2"
+  }
+}

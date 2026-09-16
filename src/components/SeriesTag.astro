@@ -1,0 +1,44 @@
+---
+/**
+ * 专辑系列标记：正式（GKCD）/ 非正式（GKSL）。
+ *
+ * 只接编号，自己推导系列 —— 调用方不需要（也不应该）知道
+ * 「GKSL 对应非正式」这层映射。映射的唯一真源在 lib/albums.ts 的 seriesOf()。
+ *
+ * 视觉上刻意不对称：只有**正式**那一种带强调色，非正式保持中性灰。
+ * 这是标注不是主角，但顺序感要一眼看得出 —— 带色的那个自然是「正」的。
+ */
+import { seriesOf, SERIES_LABELS, SERIES_SHORT } from '../lib/albums';
+
+interface Props {
+  catalog: string;
+  /** 用全称「正式专辑」而非短名「正式」。空间宽裕处（如专辑页头部）用 */
+  long?: boolean;
+}
+
+const { catalog, long = false } = Astro.props;
+const series = seriesOf(catalog);
+const label = long ? SERIES_LABELS[series] : SERIES_SHORT[series];
+---
+
+<span class:list={['series', `series--${series.toLowerCase()}`]}>{label}</span>
+
+<style>
+  .series {
+    display: inline-block;
+    font-size: var(--text-meta);
+    letter-spacing: var(--ls-wide-sm);
+    line-height: 1.6;
+    padding: 0 6px;
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-sm);
+    color: var(--ink-400);
+    white-space: nowrap;
+  }
+
+  .series--gkcd {
+    color: var(--accent);
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+  }
+</style>

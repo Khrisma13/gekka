@@ -1,0 +1,139 @@
+---
+import { SITE, asset, type Locale } from '../config/site';
+
+interface Props {
+  title: string;
+  description?: string;
+  locale?: Locale;
+  /** 社交分享卡图片，缺省用统一的默认图 */
+  image?: string;
+  type?: 'website' | 'article' | 'music.album';
+  /** 开发中的页面不进搜索引擎 */
+  noindex?: boolean;
+  /**
+   * 本次是否允许播首页的进场遮罩（见 components/Intro.astro）。
+   * 只有首页传 true。这里只负责「首帧之前定下要不要播」这一件事 ——
+   * 元素与退场都在 Intro 里，样式在 global.css。
+   */
+  intro?: boolean;
+}
+
+const {
+  title,
+  description = SITE.description.zh,
+  locale = 'zh',
+  image = asset('/og-default.png'),
+  type = 'website',
+  noindex = false,
+  intro = false,
+} = Astro.props;
+
+const fullTitle = title === SITE.name ? title : `${title} — ${SITE.name}`;
+const canonical = new URL(Astro.url.pathname, Astro.site ?? SITE.url).href;
+const ogImage = new URL(image, Astro.site ?? SITE.url).href;
+const ogLocale = { zh: 'zh_CN', ja: 'ja_JP', en: 'en_US' }[locale];
+---
+
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="generator" content={Astro.generator} />
+
+<title>{fullTitle}</title>
+<meta name="description" content={description} />
+<link rel="canonical" href={canonical} />
+{noindex && <meta name="robots" content="noindex, nofollow" />}
+
+<!-- 图标：由社团徽记生成，见 scripts/build-brand.mjs（npm run brand） -->
+<link rel="icon" type="image/png" sizes="180x180" href={asset('/favicon.png')} />
+<link rel="apple-touch-icon" href={asset('/favicon.png')} />
+<meta name="theme-color" content="#FAFBFC" />
+<meta name="color-scheme" content="light" />
+
+<!-- 社交分享卡 -->
+<meta property="og:type" content={type} />
+<meta property="og:site_name" content={SITE.name} />
+<meta property="og:title" content={fullTitle} />
+<meta property="og:description" content={description} />
+<meta property="og:url" content={canonical} />
+<meta property="og:image" content={ogImage} />
+<meta property="og:locale" content={ogLocale} />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content={fullTitle} />
+<meta name="twitter:description" content={description} />
+<meta name="twitter:image" content={ogImage} />
+
+<!--
+  字体：自托管 MiSans。
+
+  字库按 Unicode 码位切成 100 个分片，用 @font-face + unicode-range 声明，
+  浏览器只下载「当前页面实际用到的字符」所在的那几个分片，通常 5–12 个。
+  不用 Google Fonts / CDN 的原因：国内访问 fonts.googleapis.com 不稳定，
+  而本站主要受众在国内；静态站也不该依赖第三方域名。
+
+  下面两条 preload 是首屏必用的拉丁分片（导航语言标记、编号、年份、©）。
+  预加载的是同一批 URL，CSS 里也有对应声明，不会产生「预加载未使用」的告警。
+-->
+<link
+  rel="preload"
+  as="font"
+  type="font/woff2"
+  crossorigin
+  href={asset('/fonts/misans/MiSans-Regular.latin.woff2')}
+/>
+<link
+  rel="preload"
+  as="font"
+  type="font/woff2"
+  crossorigin
+  href={asset('/fonts/misans/MiSans-Medium.latin.woff2')}
+/>
+<link rel="stylesheet" href={asset('/fonts/misans/MiSans.css')} />
+
+<!-- 先标 js 类，再让 .reveal 进入待显示状态，避免闪烁 -->
+<script is:inline>
+  document.documentElement.classList.add('js');
+</script>
+
+{
+  intro && (
+    <Fragment>
+      <!--
+        进门禁：**这次要不要播首页的进场遮罩**。整块只在首页输出 —— 别的页面不该为它
+        背上这段脚本，这段说明也一样（注释放条件块里面，否则每一页都会带上它）。
+
+        必须放在 head 里同步执行：遮罩是「先亮着、等文档就绪再淡出」的，判断放到 body
+        里就已经晚了 —— 遮罩会先以「不播」的姿态露一帧首页、再补上，那一下闪比不做还糟。
+        元素与退场在 components/Intro.astro，样式在 global.css「首页进场遮罩」。
+
+        另有两道门，任一没过就整段不生效：
+          · 用户开了「减少动态效果」——与入场动画、出场幕布同一个口径；
+          · 本会话已经进过站。它是个开场，第二次就变成打扰了。
+
+        sessionStorage 读不到（隐私模式、沙箱、某些 file:// 场景）就照常放一次：
+        宁可多放一次，也别让第一次来的人什么都看不到。
+      -->
+      <script is:inline>
+        (function () {
+          var root = document.documentElement;
+
+          if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+          try {
+            if (sessionStorage.getItem('gekka:intro')) return;
+            sessionStorage.setItem('gekka:intro', '1');
+          } catch (err) {}
+
+          root.dataset.intro = 'in';
+
+          // 兜底：退场脚本没跑成（被拦、DOM 被换掉）时遮罩会永久盖住首页，到点自己摘掉。
+          // 正常路径下节点早删了，这里是空操作。宁可没有动效，也不能白屏。
+          setTimeout(function () {
+            var el = document.querySelector('.intro');
+            if (el) el.remove();
+            if (root.dataset.intro) root.dataset.intro = 'out';
+          }, 8000);
+        })();
+      </script>
+    </Fragment>
+  )
+}

@@ -1,0 +1,788 @@
+/* ==========================================================================
+   月華社 · 全局样式
+   reset → 排版基线 → 布局工具 → 通用原子类
+   ========================================================================== */
+
+@import './tokens.css';
+@import './clip.css';
+
+/* --- reset ---------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+  /* 底色同时挂在 html 上：页面切换「入场」时 body 是透明的（见文末「页面切换过渡」），
+     那一刻露出来的必须是同一个纸色，否则会先闪一下浏览器的默认白。 */
+  background: var(--paper-50);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
+body {
+  background: var(--paper-50);
+  color: var(--ink-700);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  font-weight: var(--w-regular);
+  line-height: var(--lh-body);
+  letter-spacing: var(--ls-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'kern' 1;
+  text-rendering: optimizeLegibility;
+  min-height: 100vh;
+}
+
+img, picture, video, svg {
+  display: block;
+  max-width: 100%;
+}
+
+input, button, textarea, select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+ul, ol {
+  list-style: none;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+/* --- 排版基线 -------------------------------------------------------------- */
+
+h1, h2, h3, h4 {
+  font-weight: var(--w-light);
+  line-height: var(--lh-heading);
+  color: var(--ink-900);
+  letter-spacing: var(--ls-normal);
+  text-wrap: balance;
+}
+
+h1 { font-size: var(--text-h1); }
+h2 { font-size: var(--text-h2); }
+h3 { font-size: var(--text-h3); font-weight: var(--w-regular); }
+
+p { text-wrap: pretty; }
+
+a {
+  color: inherit;
+  text-decoration: none;
+  transition: color var(--dur-fast) var(--ease);
+}
+
+a:hover { color: var(--accent); }
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--ink-900);
+}
+
+:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* --- 渲染出来的 Markdown 正文 --------------------------------------------
+   `<Content />` 渲染出的 HTML 不带本页 / 本组件的作用域标记，组件里的 scoped
+   样式选不中它的子元素（只能写 :global()）。所以正文排版统一放这里：
+   页面只要把正文套在一个 `.prose` 容器里即可（动态时间线、专辑简介都是这么用的）。
+   别在组件里再写一份。 */
+
+.prose {
+  overflow-wrap: break-word;
+}
+
+/* 段落与块之间的呼吸。用 --s-5（24px）与专辑简介原有的间距一致 ——
+   换文案时不会因为这条通用规则而悄悄变松紧。 */
+.prose > * + * {
+  margin-top: var(--s-5);
+}
+
+.prose h2 {
+  font-size: var(--text-h3);
+  margin-top: var(--s-7);
+}
+
+.prose h3,
+.prose h4 {
+  font-size: var(--text-body);
+  font-weight: var(--w-medium);
+  margin-top: var(--s-6);
+}
+
+/* 正文里的链接：常年带下划线（与 .link-inline 同一套处理） */
+.prose a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: var(--accent-line);
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--dur-fast) var(--ease);
+}
+
+.prose a:hover {
+  text-decoration-color: var(--accent);
+}
+
+/* 全局 reset 把 ul/ol 的记号去掉了，正文里要还回来 */
+.prose ul,
+.prose ol {
+  padding-left: 1.4em;
+}
+
+.prose ul { list-style: disc; }
+.prose ol { list-style: decimal; }
+
+.prose li + li {
+  margin-top: var(--s-2);
+}
+
+.prose img {
+  border-radius: var(--r-md);
+  border: 1px solid var(--line-1);
+}
+
+.prose blockquote {
+  padding-left: var(--s-5);
+  border-left: 1px solid var(--line-2);
+  color: var(--ink-500);
+}
+
+.prose code {
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+  color: var(--ink-700);
+  background: var(--paper-100);
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+}
+
+.prose hr {
+  height: 1px;
+  background: var(--line-1);
+  border: none;
+}
+
+/* --- 布局 ----------------------------------------------------------------- */
+
+.container {
+  width: 100%;
+  max-width: calc(var(--w-container) + var(--gutter) * 2);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+/* 正文列收窄。
+   刻意不做居中 —— 区块左边界必须和其他区块对齐，否则页面会显得散。 */
+.measure {
+  max-width: var(--w-text);
+}
+
+.section {
+  padding-block: var(--section-y);
+}
+
+.section--tight {
+  padding-block: clamp(48px, 6vw, 80px);
+}
+
+/* 区块标题：左侧主标题，右侧可放筛选或跳转 -------------------------------- */
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-5);
+  flex-wrap: wrap;
+  margin-bottom: var(--s-7);
+  padding-bottom: var(--s-4);
+  border-bottom: 1px solid var(--line-1);
+}
+
+.section-head__title {
+  font-size: var(--text-h2);
+  font-weight: var(--w-light);
+}
+
+.section-head__note {
+  font-size: var(--text-sm);
+  color: var(--ink-400);
+}
+
+/* --- 筛选条 --------------------------------------------------------------
+   专辑列表页与曲目库共用。芯片（.chip）现在只有专辑列表页在用；曲目库四项筛选
+   一律用下拉（取值多、条目长，铺成芯片会把筛选区压成三四行）。 */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-7) var(--s-8);
+  margin-bottom: var(--s-8);
+}
+
+/* 没有任何一组筛选够格显示时整块收起。
+   display: flex 的优先级高于浏览器默认的 [hidden]，必须显式收掉。 */
+.filters[hidden] {
+  display: none;
+}
+
+/* 窄屏上每组筛选各占一行，48px 的行间距会把筛选区撑到半个屏幕高，
+   列表被推到很下面。收一档，控制区仍然分明。 */
+@media (max-width: 600px) {
+  .filters {
+    gap: var(--s-5) var(--s-5);
+    margin-bottom: var(--s-6);
+  }
+}
+
+.filters__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}
+
+.chip {
+  font-size: var(--text-sm);
+  letter-spacing: var(--ls-wide-sm);
+  color: var(--ink-500);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-full);
+  padding: 4px 14px;
+  transition:
+    color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease);
+}
+
+.chip:hover {
+  color: var(--ink-900);
+  border-color: var(--line-2);
+}
+
+.chip.is-active {
+  color: var(--accent);
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+
+/* 筛选结果为空、或数据尚未接入时的提示 */
+.empty {
+  padding-block: var(--s-8);
+  color: var(--ink-400);
+  font-size: var(--text-sm);
+}
+
+.empty code {
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+  color: var(--ink-700);
+  background: var(--paper-100);
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+}
+
+/* --- 通用原子类 ------------------------------------------------------------ */
+
+/* 小标签：大写 + 宽字距。参考站的导航就是这种处理 */
+.eyebrow {
+  display: inline-block;
+  font-size: var(--text-meta);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--ls-wide);
+  text-transform: uppercase;
+  color: var(--ink-400);
+}
+
+.meta {
+  font-size: var(--text-meta);
+  color: var(--ink-400);
+  letter-spacing: var(--ls-wide-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 专有名词字体：专辑编号、时长、日期对齐用 */
+.mono-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* 标签组：文章卡片与文章详情页共用的圆角小胶囊。
+   间距由使用处自己给（两处的上下文留白不同），这里只管胶囊本身 */
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.tag-list li {
+  font-size: var(--text-meta);
+  letter-spacing: var(--ls-wide-sm);
+  color: var(--ink-400);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-full);
+  padding: 2px 10px;
+}
+
+/* 入口卡网格 —— `/about#links`（链接聚合）与 `/contact`（联系方式）共用。
+   两处都是「一张卡 = 一个入口」，卡里的内容是同一形状，网格自然也是同一套；
+   各写一份的话，改一处忘另一处，两个页面的卡片宽度会悄悄分叉。
+
+   比成员卡（300px）窄一档：卡里只有两三行短文字，给 300px 会变成一行一个、还拉得很长。
+   `min(100%, 240px)` 而不是裸的 240px —— 容器比它还窄时（极窄屏），裸的 minmax
+   会撑出一个 240px 的轨道，整页横向溢出。
+   `auto-fill` 而不是 `auto-fit`：卡片宽度不随条目数变化，1 个入口与 7 个入口是同一套版。 */
+.grid-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  gap: var(--s-5);
+}
+
+/* 下划线从左展开的链接。全站主要交互语汇 */
+.link-underline {
+  position: relative;
+  display: inline-block;
+  color: var(--ink-900);
+}
+
+.link-underline::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  width: 100%;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--dur) var(--ease);
+}
+
+.link-underline:hover::after,
+.link-underline:focus-visible::after {
+  transform: scaleX(1);
+}
+
+/* 常年带下划线的正文内链接 */
+.link-inline {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: var(--accent-line);
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--dur-fast) var(--ease);
+}
+
+.link-inline:hover {
+  text-decoration-color: var(--accent);
+}
+
+.divider {
+  height: 1px;
+  background: var(--line-1);
+  border: none;
+}
+
+/* 占位块：素材未到位时用，避免布局跳动 */
+.placeholder {
+  background: var(--paper-100);
+  border: 1px solid var(--line-1);
+  display: grid;
+  place-items: center;
+  color: var(--ink-300);
+  font-size: var(--text-meta);
+  letter-spacing: var(--ls-wide-sm);
+}
+
+/* 屏幕阅读器专用 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- 滚动进入动效 ----------------------------------------------------------
+   由 Reveal.astro 的 IntersectionObserver 添加 .is-visible。
+   没有 JS 时内容默认可见，不做渐进增强陷阱。 */
+
+.reveal {
+  opacity: 1;
+}
+
+html.js .reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition:
+    opacity var(--dur-slow) var(--ease),
+    transform var(--dur-slow) var(--ease);
+}
+
+html.js .reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.js .reveal {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* --- 输入框与结果计数 ------------------------------------------------------
+   曲目库 `/tracks` 与站内搜索 `/search` 共用。原先这两组写在「曲目库」的 scoped
+   样式里，接入搜索页时上移到这里 —— 两页各写一份的话，改一处忘另一处，
+   同一个输入框会在两处悄悄分叉（同 §22.5 把 `.grid-links` 升成全局工具类的理由）。
+   下拉（`.select`）仍留在曲目库自己的 scoped 样式里：只有那一页用得上。 */
+
+/* 搜索框独占一行：它是这两页最主要的入口 */
+.filters__search {
+  flex: 1 1 100%;
+}
+
+.input {
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  margin-top: var(--s-3);
+  padding: 8px 12px;
+  font-size: var(--text-sm);
+  color: var(--ink-900);
+  background: var(--paper-0);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-sm);
+  transition: border-color var(--dur-fast) var(--ease);
+}
+
+.input:hover {
+  border-color: var(--line-2);
+}
+
+.input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.input::placeholder {
+  color: var(--ink-300);
+}
+
+/* --- 结果计数与「清除筛选」 ------------------------------------------------ */
+
+.toolbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-5);
+  margin-bottom: var(--s-3);
+}
+
+.toolbar__count {
+  font-size: var(--text-sm);
+  color: var(--ink-400);
+  font-variant-numeric: tabular-nums;
+}
+
+.toolbar__reset {
+  display: inline-block;
+  position: relative;
+  font-size: var(--text-sm);
+  color: var(--ink-500);
+  transition: color var(--dur-fast) var(--ease);
+}
+
+/* display 会盖掉浏览器默认的 [hidden]，得自己收 */
+.toolbar__reset[hidden] {
+  display: none;
+}
+
+.toolbar__reset::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--dur) var(--ease);
+}
+
+.toolbar__reset:hover {
+  color: var(--ink-900);
+}
+
+.toolbar__reset:hover::after {
+  transform: scaleX(1);
+}
+
+/* --- 页面切换过渡 ----------------------------------------------------------
+   全站每次跳转都是一次「整页换一张纸」，中间那道白闪是静默的粗糙感。
+   这里给它两半，一页一半、都不需要往页面里加标记：
+
+     · 入场（下面这段）：每次文档加载都把内容从透明淡进来。**纯 CSS** ——
+       没有 JS 也照常淡入，也不怕 bfcache 恢复（同一份文档，动画状态还在），
+       更不需要往 sessionStorage 里塞标记。
+     · 出场（`layouts/BaseLayout.astro` 的页尾脚本）：点站内链接时先把一块纸色
+       幕布淡入、再跳转。上一页退场是「盖上一层纸」，新页面入场是「纸上浮出内容」，
+       两半接得上（幕布与新页面的底色是同一个 --paper-50，见上面 html 那条）。
+
+   **只用 opacity，不做位移。** 位移（transform）会给 body 造出一个包含块，
+   把粘顶页头与 `position: fixed` 的元素一起带歪；而且滑来滑去与「清冷极简」
+   也不搭。这一点与 §6 里「不做首页动效大场面」是同一套判断。
+   `both` 关键字是关键：没有它，动画开始前会有一帧是「内容已经全亮着」，
+   那一帧就是闪。 */
+body {
+  animation: page-enter var(--dur) var(--ease) both;
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 幕布。默认完全透明地躺在最上层，只有出场那一刻才被点亮（`data-pt="out"`）。
+   指针事件一律穿透：它只是视觉，不该让「跳转没走成」的那一会儿点不动页面。 */
+.page-fade {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: var(--paper-50);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
+html[data-pt='out'] .page-fade {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body {
+    animation: none;
+  }
+}
+
+/* --- 首页进场遮罩 ----------------------------------------------------------
+   「进入网站」时挡在首屏上的一块纸色，等文档就绪再淡出，露出首页主视觉。
+   版式与手法参照 logical-emotion.com / jizue.com 的首屏（满屏纸色 + 一个极小的
+   居中指示物 + 淡出），主内容的错开上浮在 index.astro 的 hero 里。
+
+   指示物是**一条 1px 的弧长成一整圈**，不是那几个跳动的点：跳点是通用 loading 的
+   语汇，与「清冷极简」不搭；而弧生成本身就是「月」的轮廓，对得上社名。
+   整圈用 --ink-900、无填充、1px —— 它得安静。
+
+   **退场不是一次淡出，是三拍**（参数见下面的 :root）。非得分拍的理由很具体：全压在一起
+   时会有那么一会儿 —— 弧、小字站名、纸面底下刚浮出来的大标题，三层东西各带一半透明度
+   叠在同一处，看着就是「糊」。让指示物先散开，揭开时才只剩一层要读的东西；让主视觉
+   先动着，揭开时才是「揭开一幅已经就位的画」，而不是「揭开一张白纸、内容再慢慢长出来」。
+
+   **默认完全不可见**：没有 JS 时 html 上不会有 data-intro，这块遮罩就不存在，
+   首页照常显示（不做渐进增强陷阱，与 .reveal 同一条思路）。
+   「这次要不要出现」的判断在 BaseHead 的 head 同步脚本里 —— 只有那里来得及。 */
+
+/* 这一个动效自己的节奏参数，不是全站令牌，所以留在这一节里而不进 tokens.css。
+   它们**必须被这一节以外的代码读到**，这是它们存在的全部理由：
+     · 组件脚本（Intro.astro）拿它算「最短显示多久」「什么时候摘节点」；
+     · 首页主视觉（index.astro）拿它定自己上浮的时机。
+   交接的平滑程度全在这些毫秒的对齐上，任何一处另写一遍数字，迟早会错开。 */
+:root {
+  /* 起手：弧画完 → 停一下（让「完成」被看见）→ 才退场 */
+  --intro-ring-dur: 1000ms;   /* 弧从无画到整圈 */
+  --intro-hold: 200ms;
+
+  /* 退场三拍。名义上可分，时间上刻意咬合，见下面的 .intro__stack 与 index.astro */
+  --intro-leave-dur: 380ms;   /* ① 指示物散开：弧放大着淡出、字上移着淡出 */
+  --intro-veil-delay: 240ms;  /* ② 纸面延后这么久才开始揭 —— 让①先走掉大半 */
+  --intro-veil-dur: 460ms;    /*    揭的过程 */
+  --intro-rise-delay: 120ms;  /* ③ 主视觉开始上浮 —— **比纸面还早**，动作藏在纸后面 */
+  --intro-rise-step: 70ms;    /*    每件之间的错开 */
+  --intro-rise-dur: 380ms;    /*    每件自己的时长 */
+
+  /* 纸面用自己的缓动，是全站唯一不跟 --ease 走的一条。理由：--ease 是五段缓出
+     (0.22,1,0.36,1)，它适合「到位」（东西快速过来然后稳住），不适合「抬起」——
+     实测拿它揭纸面，名义 460ms 的一整块纸在头 60ms 里就掉到五成，剩下全是极低透明度
+     的拖尾，读起来还是「闪一下」。纸面是**大面积色块**，要的是均匀：缓入缓出。 */
+  --intro-veil-ease: cubic-bezier(0.42, 0, 0.58, 1);
+}
+
+.intro {
+  position: fixed;
+  inset: 0;
+  /* 比 .page-fade（999）再高一层：从首页离场时，那层幕布不该盖在进场遮罩上 */
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  background: var(--paper-50);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+html[data-intro] .intro {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+/* 退场第二拍：纸面自己揭。**出现那一下不能有动效** —— 它要在首帧之前就已经是亮的，
+   加了反而会在某些时序下先露一帧「没有遮罩」的首页出来，那一帧就是闪。所以只在 out 上
+   挂动画，in 上什么都不挂（opacity 直接就是 1）。
+
+   写成动画而不是过渡，为的是让三拍各说各的、互不推让：过渡的起点是「当前值」，
+   而这里要说的是「从 1 淡到 0，但先等 --intro-veil-delay」—— 拍子之间的间隔由 delay
+   讲清楚，不必靠谁先谁后去算。`both` 同样关键：延迟那一段得把 opacity 按在 1 上。 */
+html[data-intro='out'] .intro {
+  animation: intro-veil-out var(--intro-veil-dur) var(--intro-veil-ease) var(--intro-veil-delay) both;
+}
+
+@keyframes intro-veil-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.intro__stack {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+}
+
+/* 退场第一拍：指示物自己先走，**在纸面开始揭之前就走掉大半**。从前弧与名是跟着纸面
+   一起淡的，于是「弧 / 小字站名 / 纸面底下的大标题」会在同一处各带一半透明度叠着 ——
+   那一段就是「接不上」的来源。字往上移着淡出，与主视觉从下浮上来接成一股劲。 */
+html[data-intro='out'] .intro__stack {
+  animation: intro-leave var(--intro-leave-dur) var(--ease) both;
+}
+
+@keyframes intro-leave {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+/* 弧。圆上的 pathLength="1" 把周长归一化，于是 dasharray / dashoffset 都用 1 这个
+   无量纲的数 —— 不必把 2πr = 138.23 写死进样式，改半径不用同步改两个数字。 */
+.intro__moon {
+  transform: rotate(-90deg); /* 起点从 3 点挪到 12 点：弧从正上方开始画 */
+}
+
+.intro__ring {
+  fill: none;
+  stroke: var(--ink-900);
+  stroke-width: 1;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+html[data-intro='in'] .intro__ring {
+  animation: intro-ring var(--intro-ring-dur) var(--ease) both;
+}
+
+/* 弧在第一拍里**放大着淡出去**（像月晕散开），不是原地等纸面盖上来。
+   它比那两行字收得慢一点（420ms > 380ms）：字先飘走，光圈再散开。 */
+html[data-intro='out'] .intro__moon {
+  /* 弧的起点在 12 点，这一条得把旋转一起写上 —— transform 是整条覆盖的 */
+  animation: intro-moon-out 420ms var(--ease) both;
+}
+
+@keyframes intro-moon-out {
+  from {
+    transform: rotate(-90deg) scale(1);
+  }
+  to {
+    transform: rotate(-90deg) scale(1.34);
+  }
+}
+
+/* 还有一件事必须在这里说：data-intro 改成 out 之后，驱动弧的那条选择器不再匹配、
+   动画被撤掉，stroke-dashoffset 会**回落到基础值 1** —— 弧会当着人的面突然消失。
+   钉住它，让它是「散出去」而不是「没了」。 */
+html[data-intro='out'] .intro__ring {
+  stroke-dashoffset: 0;
+}
+
+@keyframes intro-ring {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* 站名跟在弧后面出来，有个「先画圆、再落名」的次序 */
+.intro__name {
+  margin-top: var(--s-5);
+  font-size: var(--text-h3);
+  font-weight: var(--w-regular);
+  letter-spacing: 0.28em;
+  /* 字距会在末字右侧留一截空档，居中时整行看着偏左 —— 补回来 */
+  text-indent: 0.28em;
+  color: var(--ink-900);
+}
+
+.intro__latin {
+  margin-top: var(--s-2);
+  font-size: var(--text-meta);
+  letter-spacing: var(--ls-wide);
+  color: var(--ink-400);
+}
+
+html[data-intro='in'] .intro__name,
+html[data-intro='in'] .intro__latin {
+  animation: intro-fade 520ms var(--ease) both;
+}
+
+html[data-intro='in'] .intro__name { animation-delay: 200ms; }
+html[data-intro='in'] .intro__latin { animation-delay: 290ms; }
+
+@keyframes intro-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

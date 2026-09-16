@@ -1,0 +1,107 @@
+---
+/**
+ * 按钮与文字操作。
+ * 极简风格下按钮不靠色彩抢注意力：主按钮是实心墨黑，次级是发丝描边。
+ */
+interface Props {
+  href?: string;
+  variant?: 'primary' | 'ghost' | 'text';
+  size?: 'md' | 'sm';
+  external?: boolean;
+  type?: 'button' | 'submit';
+  class?: string;
+}
+
+const {
+  href,
+  variant = 'ghost',
+  size = 'md',
+  external = false,
+  type = 'button',
+  class: className = '',
+} = Astro.props;
+
+const Tag = href ? 'a' : 'button';
+const rel = external ? 'noopener noreferrer' : undefined;
+const target = external ? '_blank' : undefined;
+---
+
+<Tag
+  class:list={['btn', `btn--${variant}`, `btn--${size}`, className]}
+  {...href ? { href, rel, target } : { type }}
+>
+  <slot />
+</Tag>
+
+<style>
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--s-2);
+    font-size: var(--text-sm);
+    font-weight: var(--w-medium);
+    letter-spacing: var(--ls-wide-sm);
+    line-height: 1;
+    border-radius: var(--r-md);
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+      background-color var(--dur-fast) var(--ease),
+      border-color var(--dur-fast) var(--ease),
+      color var(--dur-fast) var(--ease);
+  }
+
+  .btn--md { padding: 13px 26px; }
+  .btn--sm { padding: 9px 16px; }
+
+  /* 主按钮：实心墨黑，最重的视觉锚点，全页不超过一个 */
+  .btn--primary {
+    background: var(--ink-900);
+    border: 1px solid var(--ink-900);
+    color: var(--paper-0);
+  }
+
+  .btn--primary:hover {
+    background: var(--ink-700);
+    border-color: var(--ink-700);
+    color: var(--paper-0);
+  }
+
+  /* 次级按钮：发丝描边，悬停时描边加深 */
+  .btn--ghost {
+    background: transparent;
+    border: 1px solid var(--line-2);
+    color: var(--ink-700);
+  }
+
+  .btn--ghost:hover {
+    border-color: var(--ink-700);
+    color: var(--ink-900);
+  }
+
+  /* 文字操作：只靠下划线，最轻 */
+  .btn--text {
+    background: none;
+    border: none;
+    padding-inline: 0;
+    color: var(--ink-700);
+    position: relative;
+  }
+
+  .btn--text::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 6px;
+    height: 1px;
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform var(--dur) var(--ease);
+  }
+
+  .btn--text:hover::after { transform: scaleX(1); }
+  .btn--text:hover { color: var(--ink-900); }
+</style>

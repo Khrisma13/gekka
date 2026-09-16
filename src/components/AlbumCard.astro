@@ -1,0 +1,140 @@
+---
+/**
+ * 专辑卡片。
+ *
+ * ⚠️ 与 REQUIREMENTS.md §2.2 的一处偏差，需你确认：
+ *    需求写的是「悬停显示标题 / 日期」。这里改成标题与编号常驻显示，
+ *    悬停只做轻微上浮与色彩变化。理由：悬停才出现的信息对触屏无效，
+ *    而手机访问占比很高；且专辑标题是主要检索依据，不该藏起来。
+ *    若你坚持原方案，改动很小，告诉我即可。
+ *
+ * 封面按 320/640/1200 三档预生成，这里交给浏览器按设备像素比自己选，
+ * 卡片本身只负责给出正确的 sizes —— 手机不会被迫下载 1200px 的大图。
+ *
+ * 编号那一行同时挂系列标记（正式 / 非正式）。系列不额外传参：
+ * SeriesTag 自己从编号推导，编号前缀就是系列的唯一定义。
+ */
+import { formatDate } from '../lib/types';
+import { coverSrcset, coverUrl } from '../lib/media';
+import SeriesTag from './SeriesTag.astro';
+
+interface Props {
+  catalog: string;
+  title: string;
+  releaseDate: string;
+  /** 封面基准路径，缺省时显示编号占位（布局不跳动） */
+  cover?: string;
+  href: string;
+  /** 第一张卡片可提高优先级做 LCP */
+  priority?: boolean;
+}
+
+const { catalog, title, releaseDate, cover, href, priority = false } = Astro.props;
+---
+
+<article class="card">
+  <a class="card__link" href={href}>
+    <div class="card__cover">
+      {
+        cover ? (
+          <img
+            src={coverUrl(cover, 640)}
+            srcset={coverSrcset(cover)}
+            sizes="(max-width: 640px) 45vw, (max-width: 1100px) 30vw, 250px"
+            alt={`《${title}》封面`}
+            width="640"
+            height="640"
+            loading={priority ? 'eager' : 'lazy'}
+            decoding="async"
+            fetchpriority={priority ? 'high' : 'auto'}
+          />
+        ) : (
+          <span class="placeholder card__placeholder">{catalog}</span>
+        )
+      }
+    </div>
+
+    <div class="card__body">
+      <p class="card__meta">
+        <span class="meta card__catalog">{catalog}</span>
+        <SeriesTag catalog={catalog} />
+      </p>
+      <h3 class="card__title">{title}</h3>
+      <p class="meta card__date">{formatDate(releaseDate)}</p>
+    </div>
+  </a>
+</article>
+
+<style>
+  .card__link {
+    display: block;
+  }
+
+  .card__cover {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    background: var(--paper-100);
+    border: 1px solid var(--line-1);
+    border-radius: var(--r-md);
+    transition:
+      transform var(--dur) var(--ease),
+      box-shadow var(--dur) var(--ease);
+  }
+
+  .card__cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform var(--dur-slow) var(--ease);
+  }
+
+  .card__placeholder {
+    position: absolute;
+    inset: 0;
+    border: none;
+    font-size: var(--text-meta);
+    letter-spacing: var(--ls-wide);
+  }
+
+  .card__link:hover .card__cover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-hover);
+  }
+
+  .card__link:hover .card__cover img {
+    transform: scale(1.02);
+  }
+
+  .card__body {
+    padding-top: var(--s-4);
+  }
+
+  /* 编号与系列标记同一行。标记比编号矮一档，靠 align-items: center 对齐基线视觉 */
+  .card__meta {
+    display: flex;
+    align-items: center;
+    gap: var(--s-2);
+    flex-wrap: wrap;
+  }
+
+  .card__catalog {
+    color: var(--ink-400);
+  }
+
+  .card__title {
+    margin-top: var(--s-2);
+    font-size: var(--text-h3);
+    font-weight: var(--w-regular);
+    color: var(--ink-900);
+    transition: color var(--dur-fast) var(--ease);
+  }
+
+  .card__link:hover .card__title {
+    color: var(--accent);
+  }
+
+  .card__date {
+    margin-top: var(--s-2);
+  }
+</style>

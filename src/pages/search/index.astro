@@ -1,0 +1,307 @@
+---
+/**
+ * 站内搜索 · /search（REQUIREMENTS §4.8）
+ *
+ * 纯静态站没有后端，搜索因此是「构建时把全部条目排进 HTML、客户端只做过与不过的
+ * 判定」—— 与曲目库 / 动态的筛选同一套做法（取舍写在 lib/search.ts 顶部）。
+ * 由此得到两个性质，都是刻意的：
+ *   · **没有 JS 时这一页是一份完整的站内索引** —— 分组、可点，只是不能筛也不能搜。
+ *     所以搜索框与范围芯片默认收着，由脚本打开；摆一个「搜不动」的输入框
+ *     只会让人以为坏了。
+ *   · 结果全在 HTML 里，筛选是同步的、没有请求，也不会有加载态。
+ *
+ * 结果行只有「标题 + 一行次要信息」，不放摘要（理由同 lib/search.ts）——
+ * 这一页的职责是把人送到正确的那一页去，不是第二个列表页。
+ *
+ * `noindex`：这一页把全站内容列了一遍，对搜索引擎而言是重复内容，
+ * 也容易被当成「兜底页」收录。它是工具，不是内容 —— 但链接照常可跟。
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { SITE } from '../../config/site';
+import { buildSearchIndex, groupHits } from '../../lib/search';
+
+const hits = await buildSearchIndex();
+const groups = groupHits(hits);
+const total = hits.length;
+---
+
+<BaseLayout
+  title="搜索"
+  description={`在${SITE.name}站内检索专辑、曲目、杂谈、动态与成员。`}
+  noindex
+>
+  <section class="container section">
+    <div class="section-head">
+      <h1 class="section-head__title">搜索</h1>
+      <p class="section-head__note">站内 {total} 条内容</p>
+    </div>
+
+    <!-- ================= 关键词与范围 =================
+         hidden 默认收着，由页尾脚本打开（没有 JS 时不显示两个用不了的控件）。 -->
+    <div class="filters" id="search-filters" hidden>
+      <div class="filters__search">
+        <label class="eyebrow" for="search-q">关键词</label>
+        <input
+          class="input"
+          id="search-q"
+          type="search"
+          placeholder="专辑名 / 曲名 / 编曲 / 文章标题"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </div>
+
+      <div class="filters__group">
+        <p class="eyebrow">范围</p>
+        <div class="filters__chips" role="group" aria-label="按类型筛选">
+          <button class="chip is-active" type="button" data-kind="all" aria-pressed="true">
+            全部
+          </button>
+          {
+            groups.map((group) => (
+              <button class="chip" type="button" data-kind={group.kind} aria-pressed="false">
+                {group.kind}
+              </button>
+            ))
+          }
+        </div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      {/* 计数由脚本改写（共 N 条 → 显示 N / M 条）。量词「条」在这个文件里出现两处
+          （模板与脚本），相邻且同源 —— 与曲目库那处计数同一写法。 */}
+      <p class="toolbar__count" id="search-count" aria-live="polite">共 {total} 条</p>
+      <button class="toolbar__reset" id="search-reset" type="button" hidden>清除筛选</button>
+    </div>
+
+    <!-- ================= 结果 =================
+         分组顺序 = SEARCH_KINDS 的声明顺序，组内顺序沿用各集合本来的顺序
+         （都来自服务端，客户端只负责藏与显 —— 见 lib/search.ts）。 -->
+    <div id="search-hits">
+      {
+        groups.map((group) => (
+          <section class="sg" data-kind={group.kind}>
+            <h2 class="sg__title">{group.kind}</h2>
+
+            <ul class="sg__list">
+              {group.hits.map((hit) => (
+                <li class="hit" data-kind={hit.kind} data-search={hit.search}>
+                  <a class="hit__link" href={hit.href}>
+                    <span class="hit__title">{hit.title}</span>
+                    {hit.meta && <span class="hit__meta mono-num">{hit.meta}</span>}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))
+      }
+    </div>
+
+    <p class="empty" id="search-empty" hidden>没有找到包含这个关键词的内容。</p>
+
+    {
+      total === 0 && (
+        <p class="empty">
+          站内还没有可检索的内容。索引由 lib/search.ts 从各内容集合现场推导，
+          集合里放上条目就会出现。
+        </p>
+      )
+    }
+  </section>
+</BaseLayout>
+
+<script is:inline>
+  (function () {
+    var wrap = document.getElementById('search-hits');
+    var filters = document.getElementById('search-filters');
+    var q = document.getElementById('search-q');
+    var empty = document.getElementById('search-empty');
+    var count = document.getElementById('search-count');
+    var reset = document.getElementById('search-reset');
+    if (!wrap || !filters || !q || !empty || !count || !reset) return;
+
+    var hits = Array.prototype.slice.call(wrap.querySelectorAll('.hit'));
+    var groups = Array.prototype.slice.call(wrap.querySelectorAll('.sg'));
+    var total = hits.length;
+    var state = { kind: 'all', q: '' };
+
+    /** 地址栏里的 ?q= 是入口：从外部点进来的查询应当直接生效 */
+    function readQuery() {
+      try {
+        return new URLSearchParams(location.search).get('q') || '';
+      } catch (err) {
+        return '';
+      }
+    }
+
+    /** 让「搜过的结果」能刷新、能分享。file:// 下改地址栏会被浏览器拒掉，
+        所以整段包在 try 里 —— 离线预览（design/preview/）正好跑在那儿。 */
+    function writeQuery() {
+      try {
+        var next =
+          location.pathname + (state.q.trim() ? '?q=' + encodeURIComponent(state.q.trim()) : '');
+        history.replaceState(null, '', next);
+      } catch (err) {}
+    }
+
+    function apply() {
+      var terms = state.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      var shown = 0;
+
+      hits.forEach(function (hit) {
+        var ok = state.kind === 'all' || hit.dataset.kind === state.kind;
+
+        // 多个词之间是「与」：全都出现在检索串里才算命中。检索串由服务端拼好
+        // （拼的规则只写在 lib/search.ts 一处），脚本不重新拼。
+        if (ok) {
+          var hay = hit.dataset.search;
+          for (var i = 0; i < terms.length; i++) {
+            if (hay.indexOf(terms[i]) === -1) {
+              ok = false;
+              break;
+            }
+          }
+        }
+
+        hit.hidden = !ok;
+        if (ok) shown += 1;
+      });
+
+      // 一条都不剩的分组整组收起：否则会留下一串光有标题的空分组
+      groups.forEach(function (group) {
+        group.hidden = !group.querySelector('.hit:not([hidden])');
+      });
+
+      empty.hidden = shown > 0;
+      count.textContent =
+        (shown === total ? '共 ' + total + ' 条' : '显示 ' + shown + ' / ' + total + ' 条');
+      reset.hidden = !(state.q.trim() || state.kind !== 'all');
+    }
+
+    filters.hidden = false;
+
+    filters.addEventListener('click', function (event) {
+      var btn = event.target.closest('.chip');
+      if (!btn) return;
+
+      state.kind = btn.dataset.kind;
+
+      // 同组内只允许一个激活
+      filters.querySelectorAll('.chip').forEach(function (el) {
+        var active = el === btn;
+        el.classList.toggle('is-active', active);
+        el.setAttribute('aria-pressed', String(active));
+      });
+
+      writeQuery();
+      apply();
+    });
+
+    q.addEventListener('input', function () {
+      state.q = q.value;
+      writeQuery();
+      apply();
+    });
+
+    reset.addEventListener('click', function () {
+      state = { kind: 'all', q: '' };
+      q.value = '';
+      // 第一个芯片是「全部」—— 复位就是把它选中
+      filters.querySelectorAll('.chip').forEach(function (el, i) {
+        el.classList.toggle('is-active', i === 0);
+        el.setAttribute('aria-pressed', String(i === 0));
+      });
+      writeQuery();
+      apply();
+    });
+
+    state.q = readQuery();
+    q.value = state.q;
+    apply();
+
+    // 光标直接落在搜索框里（鼠标 / 触控板进来的情况）。触屏上不抢焦点 ——
+    // 那会当场弹出软键盘，把刚打开的页面顶掉半屏。带 ?q= 进来也不抢，
+    // 免得把光标停在词首、再打字变成往前插。
+    if (!state.q && window.matchMedia && matchMedia('(pointer: fine)').matches) q.focus();
+  })();
+</script>
+
+<style>
+  /* 搜索框（.filters__search / .input）、筛选条（.filters / .filters__chips / .chip）、
+     计数与清除（.toolbar*）、空状态（.empty）都在 styles/global.css ——
+     曲目库与这一页共用，别在这里再写一份。 */
+
+  .sg + .sg {
+    margin-top: var(--s-8);
+  }
+
+  /* 分组标题：与动态时间线的月份标题同一档（小字、宽字距、细线），
+     它是分隔而不是内容 —— 搜索页的主角是结果行。 */
+  .sg__title {
+    font-size: var(--text-sm);
+    font-weight: var(--w-medium);
+    letter-spacing: var(--ls-wide);
+    color: var(--ink-500);
+    padding-bottom: var(--s-3);
+    border-bottom: 1px solid var(--line-1);
+  }
+
+  /* 行与行之间只画上边线：最后一行不留尾线，整组看起来是「收」住的 */
+  .hit + .hit {
+    border-top: 1px solid var(--line-1);
+  }
+
+  .hit__link {
+    display: grid;
+    /* 标题吃掉剩余宽度，次要信息贴右 —— 扫列表时右边界齐整，值好对 */
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--s-1) var(--s-5);
+    align-items: baseline;
+    padding: var(--s-4);
+    transition: background-color var(--dur-fast) var(--ease);
+  }
+
+  .hit__link:hover {
+    background: var(--paper-100);
+  }
+
+  .hit__title {
+    color: var(--ink-900);
+  }
+
+  /* 整行可点，所以悬停反馈打在行上、颜色落在标题上 —— 与曲目库索引表同一处理 */
+  .hit__link:hover .hit__title {
+    color: var(--accent);
+  }
+
+  /* 次要信息不折行：日期与编号折一半会很难读 */
+  .hit__meta {
+    font-size: var(--text-meta);
+    letter-spacing: var(--ls-wide-sm);
+    color: var(--ink-400);
+    white-space: nowrap;
+  }
+
+  /* ⚠ 不能删。`.hit` 是 li、浏览器默认 `[hidden] { display: none }` 本来够用，
+     显式写这条是因为改样式时很容易顺手给 li 加上 display ——
+     那一刻筛选就会「看着不生效」（曲目库与动态都栽过，见 DESIGN §13.4）。 */
+  .hit[hidden],
+  .sg[hidden] {
+    display: none;
+  }
+
+  /* 窄屏：次要信息落到标题下面一行 —— 与曲目库索引表摊成卡片同一处理。
+     这时它不再贴右，也就不需要 nowrap，长一点的「编号 · 专辑名」可以安心折行。 */
+  @media (max-width: 700px) {
+    .hit__link {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--s-2);
+    }
+
+    .hit__meta {
+      white-space: normal;
+    }
+  }
+</style>

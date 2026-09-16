@@ -1,0 +1,169 @@
+---
+/**
+ * 入口卡片：名称 + 账号 / 群号 / 邮箱 + 一句补充。
+ *
+ * 两个页面共用 —— `/about#links`「链接聚合」（集合 `links`，带分组）与
+ * `/contact`「联系方式」（集合 `contacts`，平铺）。两边的条目形状相同，
+ * 卡片自然是同一张；组件只认下面 `CardData` 那四处，本来也不看分组。
+ *
+ * 三种形态由数据自己决定，不额外加字段（见 DESIGN §21.7）：
+ *   · 有 `href`      → 整张卡是一个外链。这种情况下**不渲染复制按钮** ——
+ *                      按钮嵌在 <a> 里是非法的，且链接本身就能把读者带走；
+ *   · 只有 `handle`  → 普通卡片 + 一枚复制按钮。QQ 群号正是这种：跳不过去，
+ *                      但读者得把号码抄走（九位数字手打必错）；邮箱同理 ——
+ *                      `mailto:` 在网页邮箱环境下经常没反应，而复制到哪儿都好使，
+ *                      所以邮箱**刻意只填 handle**（见 content/contacts/email.md）；
+ *   · 两者都空       → handle 位显示「待补充」。素材未到位时的占位态，
+ *                      填上值就自动变成上面两种里的一种。
+ *
+ * 复制按钮**只有样式与标记在这里**，点击逻辑在 `components/CopyScript.astro` 里
+ * （用到的页面在末尾挂一次，一页跑一遍，不为每张卡注册一份监听）。
+ */
+import type { LinkData } from '../lib/links';
+
+/**
+ * 卡片只认这四处 —— 用 `Pick` 而不是手写一份接口：形状的真源是内容集合的 schema，
+ * 手写第二份迟早对不上（同 `Member` / `Post` 接口被删掉的理由）。
+ * `contacts` 的条目只是少了 `group`，而卡片本来就不看分组。
+ */
+type CardData = Pick<LinkData, 'label' | 'handle' | 'href' | 'note'>;
+
+interface Props {
+  link: CardData;
+}
+
+const { link } = Astro.props;
+
+const external = Boolean(link.href);
+const pending = !link.href && !link.handle;
+---
+
+{
+  external ? (
+    <a class="link-card" href={link.href} target="_blank" rel="noopener noreferrer">
+      <span class="link-card__top">
+        <span class="link-card__label">{link.label}</span>
+        <span class="link-card__go" aria-hidden="true">
+          ↗
+        </span>
+      </span>
+      {link.handle && <span class="link-card__handle mono-num">{link.handle}</span>}
+      {link.note && <span class="link-card__note">{link.note}</span>}
+    </a>
+  ) : (
+    <div class="link-card">
+      <span class="link-card__top">
+        <span class="link-card__label">{link.label}</span>
+        {!pending && (
+          <button class="link-card__copy" type="button" data-copy={link.handle}>
+            复制
+          </button>
+        )}
+      </span>
+      {pending ? (
+        <span class="link-card__handle link-card__pending">待补充</span>
+      ) : (
+        <span class="link-card__handle mono-num">{link.handle}</span>
+      )}
+      {link.note && <span class="link-card__note">{link.note}</span>}
+    </div>
+  )
+}
+
+<style>
+  .link-card {
+    display: grid;
+    gap: var(--s-1);
+    height: 100%;
+    padding: var(--s-5);
+    background: var(--paper-0);
+    border: 1px solid var(--line-1);
+    border-radius: var(--r-md);
+    transition:
+      border-color var(--dur-fast) var(--ease),
+      box-shadow var(--dur) var(--ease),
+      transform var(--dur) var(--ease);
+  }
+
+  /* 只有外链卡片浮起：不可点的卡片跟着动会骗人 */
+  a.link-card:hover {
+    border-color: var(--line-2);
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-hover);
+  }
+
+  .link-card__top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--s-3);
+  }
+
+  .link-card__label {
+    font-size: var(--text-h3);
+    font-weight: var(--w-regular);
+    color: var(--ink-900);
+    transition: color var(--dur-fast) var(--ease);
+  }
+
+  a.link-card:hover .link-card__label {
+    color: var(--accent);
+  }
+
+  .link-card__go {
+    flex-shrink: 0;
+    font-size: var(--text-sm);
+    color: var(--ink-300);
+    transition: color var(--dur-fast) var(--ease);
+  }
+
+  a.link-card:hover .link-card__go {
+    color: var(--accent);
+  }
+
+  /* 账号 / 群号用等宽数字：换行时数字列才对得齐 */
+  .link-card__handle {
+    margin-top: var(--s-2);
+    font-size: var(--text-sm);
+    letter-spacing: var(--ls-wide-sm);
+    color: var(--ink-600);
+    overflow-wrap: anywhere;
+  }
+
+  .link-card__pending {
+    color: var(--ink-300);
+    letter-spacing: var(--ls-normal);
+  }
+
+  .link-card__note {
+    margin-top: var(--s-2);
+    font-size: var(--text-meta);
+    color: var(--ink-400);
+  }
+
+  .link-card__copy {
+    flex-shrink: 0;
+    font-size: var(--text-meta);
+    letter-spacing: var(--ls-wide-sm);
+    color: var(--ink-400);
+    border: 1px solid var(--line-1);
+    border-radius: var(--r-full);
+    padding: 1px 10px;
+    transition:
+      color var(--dur-fast) var(--ease),
+      border-color var(--dur-fast) var(--ease),
+      background-color var(--dur-fast) var(--ease);
+  }
+
+  .link-card__copy:hover {
+    color: var(--ink-900);
+    border-color: var(--line-2);
+  }
+
+  /* 复制成功 / 需要手动复制的提示态（文案由脚本改） */
+  .link-card__copy.is-done {
+    color: var(--accent);
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+  }
+</style>
