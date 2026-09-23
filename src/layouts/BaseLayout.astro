@@ -2,6 +2,7 @@
 import BaseHead from '../components/BaseHead.astro';
 import SiteHeader from '../components/SiteHeader.astro';
 import SiteFooter from '../components/SiteFooter.astro';
+import EasterEgg from '../components/EasterEgg.astro';
 import { DEFAULT_LOCALE, type Locale } from '../config/site';
 import '../styles/global.css';
 
@@ -60,6 +61,11 @@ const {
     <!-- 页面级覆盖层的落点：在页脚之后、页面切换幕布之前。
          目前只有首页的进场遮罩（components/Intro.astro）挂在这里。 -->
     <slot name="overlay" />
+
+    <!-- 彩蛋小游戏的外壳：默认 hidden，也不下载任何玩法资源 —— 只有页脚徽记连点三下
+         才把 public/games/easter.* 拉起来。摆在页脚之后是必须的：那段引导脚本要找的
+         触发点就在页脚里。bare（样张页）没有页脚，也就没有触发点，整块不输出。 -->
+    {!bare && <EasterEgg />}
 
     <!-- 页面切换的幕布。样式在 styles/global.css 的「页面切换过渡」一节（含入场那半场），
          这里只放元素与出场脚本 —— 全站共用一份，别在各个页面里再写。 -->
@@ -131,6 +137,19 @@ const {
           event.preventDefault();
           leaving = true;
           root.dataset.pt = 'out';
+
+          /**
+           * 记下「本会话已经进过站」—— 首页的进场遮罩读这个键，就不再开场了
+           * （见 components/BaseHead.astro 的 intro 分支）。
+           *
+           * **写在这里，而不是每次页面加载时写**：这个键的含义是「从站内别处走过来」，
+           * 只有在用户真的点了站内链接的这一下才成立。写在页面加载里的话，它同时也会
+           * 被「刷新」和「直接打开」写上，首页的进场动画就会因为这些一次都不播
+           * （线上踩过：上线后在同标签页刷新几次看效果，看到的就是「动画失效」）。
+           */
+          try {
+            sessionStorage.setItem('gekka:intro', '1');
+          } catch (err) {}
 
           // 兜底：万一定位没走成（跳转被拦、目标被删、链接是个空壳），把幕布收回去 ——
           // 否则整页被一块纸色永久盖住，而且没有任何出口。

@@ -1,0 +1,330 @@
+/* ==========================================================================
+   月華社 · 彩蛋小游戏 · 外壳
+   --------------------------------------------------------------------------
+   触发：页脚左侧的社团徽记连点三下（判断在 components/EasterEgg.astro 的内联脚本里）。
+
+   这里只管**外壳**：遮罩、对话框、页眉页脚、舞台、通关面板、提示泡、两个文字操作。
+   具体怎么玩不在这里 —— 一个玩法一套文件（linkup.* / minesweeper.*），
+   由 shell.js 按需拉进来。加第三个小游戏只需要在 EasterEgg.astro 里加一个槽，
+   这个文件和 shell.js 都不用动。
+
+   与另外几个玩法文件一样，**都不在构建管线里**：放在 public/ 下由 Astro 原样拷进 dist，
+   只有真正触发时那一小段内联脚本才把它们拉进来。所以：
+
+     · 没触发过的页面一个字节都不下载（这也是不写成内联脚本的理由）；
+     · 这里的样式必须是**全局**的，不能靠 Astro 的作用域标记 ——
+       面板与棋盘都是脚本运行时生成的元素，作用域标记加不到它们身上
+       （同 DESIGN §13.4 那条教训：组件根元素带自己的 cid，页面选择器匹配不到）；
+     · 配色只取 tokens.css 的令牌，其余的视觉词表（发丝线、小圆角、字距）
+       跟全站保持一致；文字操作的样式刻意在本文件里留一份，
+       为的是彩蛋能独立于 global.css 演化 —— 但**改全站视觉时别漏了这里**。
+
+   动效全部跟 --dur / --ease 走，并在「减少动态效果」下关掉（见文件末尾）。
+   ========================================================================== */
+
+/* --- 遮罩层与面板 --------------------------------------------------------- */
+
+.egg {
+  position: fixed;
+  inset: 0;
+  /* 与首页进场遮罩（.intro）同层，高于页面切换幕布（.page-fade / 999）。
+     两者不会同时出现：进场遮罩只在首页首帧那一会儿，那时没人能点到页脚。 */
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: var(--s-5) var(--s-4);
+}
+
+/* display 会盖掉浏览器默认的 [hidden]，得自己收 */
+.egg[hidden] {
+  display: none;
+}
+
+/* 一条兜底：外壳里凡是标了 hidden 的都不出现。
+   光靠浏览器默认的那条 [hidden]{display:none} 是不够的 —— 本文件与玩法样式里
+   给这些元素写了 display（.egg__game 是 grid、页脚块是 flex），
+   单类选择器会比它更具体，于是「隐藏」静默失效。
+   这行同时管着：非当前玩法的舞台槽 / 页脚块 / 标题、未触发的通关面板。
+   ⚠ 同 §17「.index__row[hidden] 不能删」那条 —— 删了就只是「筛选失灵」。 */
+.egg [hidden] {
+  display: none;
+}
+
+.egg__veil {
+  position: absolute;
+  inset: 0;
+  /* 纸色蒙版而不是黑罩：底下的页面还看得见一层影子，像「纸盖在纸上」。
+     颜色挂在 color-mix 上，与主视觉的可读性蒙版同一套写法，不写死 rgba。 */
+  background: color-mix(in srgb, var(--paper-50) 90%, transparent);
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease);
+}
+
+.egg.is-open .egg__veil {
+  opacity: 1;
+}
+
+.egg__panel {
+  position: relative;
+  display: grid;
+  gap: var(--s-5);
+  width: min(520px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: var(--s-6) var(--s-6) var(--s-5);
+  background: var(--paper-0);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-hover);
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity var(--dur) var(--ease),
+    transform var(--dur) var(--ease);
+}
+
+.egg.is-open .egg__panel {
+  opacity: 1;
+  transform: none;
+}
+
+.egg__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-4);
+}
+
+.egg__kicker {
+  font-size: var(--text-meta);
+  letter-spacing: var(--ls-wide);
+  text-transform: uppercase;
+  color: var(--ink-400);
+}
+
+.egg__title {
+  margin-top: var(--s-2);
+  font-size: var(--text-h3);
+  font-weight: var(--w-regular);
+  color: var(--ink-900);
+  letter-spacing: 0.2em;
+  /* 字距会在末字右侧留一截空档，居中/对齐时看着偏左 —— 补回来（同 .intro__name） */
+  text-indent: 0.2em;
+}
+
+.egg__close {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  color: var(--ink-400);
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  transition:
+    color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+
+.egg__close:hover {
+  color: var(--ink-900);
+  border-color: var(--line-1);
+}
+
+.egg__close svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+/* 舞台：每个玩法在里面占一个槽（.egg__game），槽里装它自己的棋盘、
+   提示泡与通关面板。非当前玩法的槽收着（hidden），所以舞台同时只有一个可见。
+   槽必须是 position: relative —— 提示泡与通关面板都拿它当定位基准。
+
+   ⚠ 这里**只能 align-items: center，不能 place-items: center**：
+   一旦 justify-items 也居中，槽就会收缩成「内容宽」（= 棋盘自己的宽），
+   而玩法算「一格多大」时量的就是可用宽 —— 拿正在被算的那个东西当基准，
+   结果一次比一次小，锁死在最小格上（实测 8×8 的棋盘只铺出 208px，格 26px）。
+   横向撑满、纵向居中，槽宽就只由舞台（= 面板）决定，与棋盘无关。 */
+.egg__stage {
+  position: relative;
+  display: grid;
+  align-items: center;
+}
+
+.egg__game {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+/* --- 通关面板与提示泡（两个玩法共用同一套皮，内容各写各的） ----------------- */
+
+.egg__done {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: var(--s-3);
+  text-align: center;
+  background: color-mix(in srgb, var(--paper-0) 92%, transparent);
+}
+
+.egg__done-title {
+  font-size: var(--text-h2);
+  font-weight: var(--w-light);
+  color: var(--ink-900);
+  letter-spacing: 0.12em;
+}
+
+.egg__done-stat {
+  font-size: var(--text-sm);
+  color: var(--ink-400);
+  font-variant-numeric: tabular-nums;
+}
+
+.egg__toast {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  padding: 4px 14px;
+  font-size: var(--text-meta);
+  letter-spacing: var(--ls-wide-sm);
+  color: var(--ink-500);
+  background: var(--paper-100);
+  border-radius: var(--r-full);
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease);
+  pointer-events: none;
+}
+
+.egg__toast.is-on {
+  opacity: 1;
+}
+
+/* --- 页脚：计数与两个文字操作（同样一个玩法一块） --------------------------- */
+
+.egg__foot {
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--line-1);
+}
+
+.egg__game-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  flex-wrap: wrap;
+}
+
+.egg__stat {
+  font-size: var(--text-sm);
+  color: var(--ink-400);
+  font-variant-numeric: tabular-nums;
+}
+
+.egg__stat b {
+  font-weight: var(--w-medium);
+  color: var(--ink-700);
+}
+
+.egg__acts {
+  display: flex;
+  gap: var(--s-5);
+}
+
+/* 文字操作：只靠一条展开的下划线（与 global.css 的 .toolbar__reset 同款，
+   本文件里另留一份的理由见文件头 —— 彩蛋要能独立演化） */
+.egg__act {
+  position: relative;
+  font-size: var(--text-sm);
+  color: var(--ink-500);
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.egg__act::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--dur) var(--ease);
+}
+
+.egg__act:hover {
+  color: var(--ink-900);
+}
+
+.egg__act:hover::after {
+  transform: scaleX(1);
+}
+
+/* 开关型的文字操作（扫雷的「插旗」）：按下时用强调色 + 常驻下划线，
+   静止态也看得出它现在是开着的 —— 不靠改文案来表达状态。 */
+.egg__act[aria-pressed='true'] {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: currentColor;
+  text-underline-offset: 3px;
+}
+
+.egg__act[aria-pressed='true']::after {
+  display: none;
+}
+
+/* 通关面板里只有这一个动作，静止态就得看得出「这是个能点的东西」——
+   常年带一条下划线，悬停时加深颜色（与全站「正文内链接」同一套写法：下划线走
+   text-decoration-color，而不是那条悬停才展开的发丝线）。 */
+.egg__done .egg__act {
+  text-decoration: underline;
+  text-decoration-color: var(--line-2);
+  text-underline-offset: 3px;
+  transition:
+    color var(--dur-fast) var(--ease),
+    text-decoration-color var(--dur-fast) var(--ease);
+}
+
+.egg__done .egg__act::after {
+  display: none;
+}
+
+.egg__done .egg__act:hover {
+  text-decoration-color: var(--accent);
+}
+
+/* --- 动效降级 -------------------------------------------------------------
+   整站的降级口径：用户开了「减少动态效果」就只剩「出现 / 消失」，
+   不播连线、不晃、不翻牌、格子也是直接变（时长归零即瞬间到位）。 */
+@media (prefers-reduced-motion: reduce) {
+  .egg,
+  .egg__veil,
+  .egg__panel,
+  .egg__toast,
+  .egg__act,
+  .egg__act::after {
+    transition: none;
+  }
+}
+
+/* 窄屏：面板铺满可用宽度，内边距收一档，棋盘才有地方长 */
+@media (max-width: 480px) {
+  .egg {
+    padding: var(--s-4) var(--s-3);
+  }
+
+  .egg__panel {
+    padding: var(--s-5) var(--s-5) var(--s-4);
+    gap: var(--s-4);
+  }
+}

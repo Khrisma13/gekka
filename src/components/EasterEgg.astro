@@ -1,0 +1,249 @@
+---
+/**
+ * 彩蛋小游戏的触发点与外壳。
+ *
+ * 触发：页脚左侧那枚社团徽记连点三下（样式在 SiteFooter 里）。
+ * 判断写在本组件末尾的内联脚本里 —— 触发点在页脚，属于每一页，
+ * 判断逻辑只有十几行，跟着外壳走最省事，也不必让页脚组件知道游戏的存在。
+ *
+ * 三样东西各归各位：
+ *   ① **这个组件**：触发判断（三连点）+ 外壳的**静态骨架**（对话框、每个玩法一个
+ *      舞台槽与一块页脚、各自的标题与文案）+ 外壳脚本与样式的地址。
+ *      静态骨架摆在这里，除了首屏不闪，更实在的是**它们会被字形自检盯上**：
+ *      scripts/check-glyphs.mjs 扫的正是 HTML 的可见文本，文案写在这里，
+ *      改错字、写了字库外的新字，构建期就报（玩法的 JS 同样在扫描范围内）。
+ *   ② **外壳**（public/games/shell.js + shell.css）：随机挑一个玩法、按需把它的资源
+ *      拉进来、开关对话框、焦点循环、锁滚动，以及每个玩法都要用的计时与提示泡。
+ *      ⚠ 它**不认识任何一个具体玩法**：名册是从下面那些槽位的 data- 属性里读出来的。
+ *   ③ **玩法**（public/games/<名字>.{js,css}）：一个玩法一套文件，只管规则与棋盘。
+ *
+ * 于是「再加一个小游戏」= 在下面加一个槽（含它自己的 js/css 与文案）+ 放那两个文件，
+ * 外壳那一层一行都不用改。契约写在 shell.js 的文件头里。
+ *
+ * 玩法资源**都在 public/ 下，触发之前一个字节都不下载**，而且随机挑中哪个才下哪个。
+ * 为什么不写成内联脚本：全站每一页都会背上那些 KB，而它 99.9% 的访问都用不上。
+ * 为什么不走 Astro 的脚本打包：打包产物是 module，file:// 下会被 CORS 拦
+ * （同 DESIGN §24 复制按钮那条），而离线预览与视觉验证走的正是 file://。
+ * 由此带来一条约定：**外壳与玩法的样式只能靠全局样式**（含运行时生成的棋盘与格子），
+ * 所以那几个 CSS 里没有一行是 Astro 的作用域样式。
+ */
+import { asset } from '../config/site';
+
+/** 外壳（不随玩法变，两个地址挂在根元素上） */
+const SHELL_JS = asset('/games/shell.js');
+const SHELL_CSS = asset('/games/shell.css');
+
+/**
+ * 玩法资源。键必须与下面槽位上的 data-game 一致 —— shell.js 就是按这个名字
+ * 去 window.GekkaGames 里取工厂的（名字对不上时它会 console.error，不再静默）。
+ */
+const GAME = {
+  linkup: {
+    js: asset('/games/linkup.js'),
+    css: asset('/games/linkup.css'),
+  },
+  minesweeper: {
+    js: asset('/games/minesweeper.js'),
+    css: asset('/games/minesweeper.css'),
+  },
+};
+---
+
+<div
+  class="egg"
+  data-egg
+  data-shell-js={SHELL_JS}
+  data-shell-css={SHELL_CSS}
+  hidden
+>
+  <!-- 遮罩本身也是「关掉」的出口：点棋盘外面就退出来。这一下不该丢进度 ——
+       局面留在原地，再连点三下徽记就是接着上一局（开的可能是另一个玩法，
+       那也不要紧：每个玩法的局面都自己留着）。 -->
+  <div class="egg__veil" data-egg-close></div>
+
+  <div
+    class="egg__panel"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="egg-title-linkup"
+    tabindex="-1"
+  >
+    <div class="egg__head">
+      <div>
+        <p class="egg__kicker">GEKKA · MINI GAME</p>
+        <!-- 每个玩法一个标题：外壳按当前玩法把另一个收起来，并把 aria-labelledby
+             指过来（读屏进面板时听到的该是当前这一局的名字） -->
+        <h2 class="egg__title" data-game="linkup" id="egg-title-linkup">连连看</h2>
+        <h2 class="egg__title" data-game="minesweeper" id="egg-title-minesweeper">扫雷</h2>
+      </div>
+      <button class="egg__close" type="button" data-egg-close aria-label="关闭">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M4.5 4.5 11.5 11.5M11.5 4.5l-7 7"></path>
+        </svg>
+      </button>
+    </div>
+
+    <div class="egg__stage" data-egg-stage>
+      <!-- ── 连连看 ───────────────────────────────────────────────────── -->
+      <div
+        class="egg__game"
+        data-game="linkup"
+        data-game-js={GAME.linkup.js}
+        data-game-css={GAME.linkup.css}
+      >
+        <p class="egg__toast" data-llk-toast role="status">已重新排列</p>
+
+        <div class="egg__done" data-llk-done hidden>
+          <p class="egg__kicker">CLEARED</p>
+          <p class="egg__done-title">全部消除</p>
+          <!-- 通关后只补两个数进来（脚本不拼句子），文案的字形自检才盯得住 -->
+          <p class="egg__done-stat">
+            用时 <b data-llk-done-time>00:00</b> <span aria-hidden="true">·</span> 提示 <b
+              data-llk-done-hints>0</b
+            > 次
+          </p>
+          <button class="egg__act" type="button" data-llk-again>再来一局</button>
+        </div>
+      </div>
+
+      <!-- ── 扫雷 ─────────────────────────────────────────────────────── -->
+      <div
+        class="egg__game"
+        data-game="minesweeper"
+        data-game-js={GAME.minesweeper.js}
+        data-game-css={GAME.minesweeper.css}
+      >
+        <!-- 这个提示泡的文案会被脚本换掉（开 / 关两种说法），两句话都写在玩法脚本里，
+             一样在字形自检的扫描范围内 -->
+        <p class="egg__toast" data-ms-toast role="status">插旗模式已开启</p>
+
+        <!-- 输赢两块面板分开写：文案不同、报的数字也不同（赢报插了几面旗、
+             输报探明了几格）。合成一块就得靠脚本改文案了 -->
+        <div class="egg__done" data-ms-done="win" hidden>
+          <p class="egg__kicker">CLEARED</p>
+          <p class="egg__done-title">扫除完毕</p>
+          <p class="egg__done-stat">
+            用时 <b data-ms-done-time>00:00</b> <span aria-hidden="true">·</span> 插旗 <b
+              data-ms-done-flags>0</b
+            > 面
+          </p>
+          <button class="egg__act" type="button" data-ms-again>再来一局</button>
+        </div>
+
+        <div class="egg__done" data-ms-done="lose" hidden>
+          <p class="egg__kicker">MINE</p>
+          <p class="egg__done-title">踩到雷了</p>
+          <p class="egg__done-stat">
+            用时 <b data-ms-done-time>00:00</b> <span aria-hidden="true">·</span> 探明 <b
+              data-ms-done-open>0</b
+            > 格
+          </p>
+          <button class="egg__act" type="button" data-ms-again>再来一局</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="egg__foot">
+      <!-- 每个玩法一块页脚：计数与两个文字操作。用时那个数由外壳的计时器写 -->
+      <div class="egg__game-foot" data-game="linkup">
+        <p class="egg__stat">
+          剩余 <b data-llk-left>18</b> 对
+          <span class="egg__sep" aria-hidden="true">·</span>
+          用时 <b data-game-time>00:00</b>
+        </p>
+        <div class="egg__acts">
+          <button class="egg__act" type="button" data-llk-hint>提示</button>
+          <button class="egg__act" type="button" data-llk-restart>重新开始</button>
+        </div>
+      </div>
+
+      <div class="egg__game-foot" data-game="minesweeper">
+        <p class="egg__stat">
+          剩余 <b data-ms-left>10</b> 雷
+          <span class="egg__sep" aria-hidden="true">·</span>
+          用时 <b data-game-time>00:00</b>
+        </p>
+        <div class="egg__acts">
+          <!-- 开关型的操作：按下的状态靠 aria-pressed + 常驻下划线表示，不改文案
+               （改文案就得脚本拼句子，而且按钮宽度会来回跳） -->
+          <button class="egg__act" type="button" data-ms-flag aria-pressed="false">插旗</button>
+          <button class="egg__act" type="button" data-ms-restart>重新开始</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script is:inline>
+  /**
+   * 触发判断：连点三下 + 把外壳脚本拉进来。
+   *
+   * 「连续」的口径：每两下之间不超过 GAP_MS，超过了就从头数。
+   * 不设这个上限的话，一天里零散点三下也会开出来 —— 那就不是彩蛋，是抽奖。
+   *
+   * 这一段只做两件事：数够三下、确保外壳脚本在位。**开哪一个玩法由外壳随机挑**
+   * （window.GekkaEaster.open() 不带参数就是随机）—— 判断留在这里、玩法清单留在 HTML、
+   * 随机与按需加载归外壳，三处各管一段。所以外壳脚本已经在了就直接开，不在才去拉，
+   * 而且只拉外壳那一个文件：玩法资源由外壳按挑中的那个再去拉。
+   */
+  (function () {
+    var root = document.querySelector('[data-egg]');
+    var logo = document.querySelector('[data-egg-logo]');
+    if (!root || !logo) return;
+
+    var NEED = 3; // 连点三下
+    var GAP_MS = 900; // 两下之间超过这么久就重新数
+    var RETRY_MS = 5000; // 兜底：这么久还没拉起来就允许重来一遍
+
+    var taps = 0;
+    var cutId = 0;
+    var loading = false;
+
+    logo.addEventListener('click', function () {
+      taps++;
+      clearTimeout(cutId);
+
+      if (taps < NEED) {
+        cutId = setTimeout(function () {
+          taps = 0;
+        }, GAP_MS);
+        return;
+      }
+
+      taps = 0;
+      fire();
+    });
+
+    function fire() {
+      // 徽记先绽一下（动画在 SiteFooter 的样式里）：资源在路上时也得有个回应
+      logo.classList.add('is-bloom');
+      setTimeout(function () {
+        logo.classList.remove('is-bloom');
+      }, 900);
+
+      if (window.GekkaEaster) {
+        window.GekkaEaster.open();
+        return;
+      }
+      if (loading) return;
+      loading = true;
+
+      var retryId = setTimeout(function () {
+        loading = false;
+      }, RETRY_MS);
+
+      var el = document.createElement('script');
+      el.src = root.getAttribute('data-shell-js');
+      el.addEventListener('load', function () {
+        clearTimeout(retryId);
+        loading = false;
+        if (window.GekkaEaster) window.GekkaEaster.open();
+      });
+      el.addEventListener('error', function () {
+        clearTimeout(retryId);
+        loading = false;
+      });
+      document.head.appendChild(el);
+    }
+  })();
+</script>

@@ -1,0 +1,161 @@
+/* ==========================================================================
+   月華社 · 彩蛋小游戏 · 连连看（玩法自己的样式）
+   --------------------------------------------------------------------------
+   只管棋盘与牌面；外壳（遮罩、对话框、页脚、通关面板）在 shell.css 里。
+   由 shell.js 在选中这个玩法时才拉进来（见 components/EasterEgg.astro 的槽位）。
+
+   棋盘是脚本按当前可用宽高算出一格多大之后「画」出来的：
+   格子绝对定位，四周留一圈空位（ring）—— 连线的折点允许走到牌阵外面，
+   这是连连看能绕着走的前提，也是判定里那个 (COLS+2)×(ROWS+2) 的来源。
+   ========================================================================== */
+
+.llk {
+  /* 这个玩法自己的节奏参数：脚本会**读回去**用（牌的淡出、连线的起笔）。
+     和 global.css 里 --intro-* 那套是同一个做法 —— 时长只有一个真源，
+     样式与脚本不各写一个数字。读回来的地方见 linkup.js 的 msOf()。 */
+  --llk-fade: 320ms;
+  --llk-line: 240ms;
+
+  position: relative;
+}
+
+.llk__tile {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  color: var(--ink-600);
+  background: var(--paper-0);
+  border-radius: var(--r-sm);
+  /* 用 inset 阴影做发丝框：border 会撑大盒子，牌面尺寸就得再减一圈，白白多一个变量 */
+  box-shadow: inset 0 0 0 1px var(--line-1);
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease),
+    opacity var(--llk-fade) var(--ease),
+    transform var(--llk-fade) var(--ease);
+}
+
+/* 棋盘里的格子挨得紧，全站那条 focus 描边（3px 偏移）会压到邻居身上，收进来 */
+.llk__tile:focus-visible {
+  outline-offset: -2px;
+}
+
+.llk__tile svg {
+  width: 62%;
+  height: 62%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.llk__tile:hover {
+  background: var(--paper-100);
+  color: var(--ink-900);
+}
+
+/* 选中：唯一会用到强调色的地方 —— 全站只有一个强调色，这里也只让它出现在「当前这张牌」上 */
+.llk__tile.is-sel,
+.llk__tile.is-sel:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* 消掉：缩小着淡出，留出一点「收走」的手感。时长 = --llk-fade，脚本读同一个值 */
+.llk__tile.is-gone {
+  opacity: 0;
+  transform: scale(0.72);
+  pointer-events: none;
+}
+
+/* 同图案却连不上：晃一下。两下刚好，再多就像坏了 */
+.llk__tile.is-blocked {
+  animation: llk-shake 260ms var(--ease) 2;
+}
+
+@keyframes llk-shake {
+  0%,
+  100% {
+    transform: none;
+  }
+  35% {
+    transform: translateX(-2px);
+  }
+  70% {
+    transform: translateX(2px);
+  }
+}
+
+/* 提示：慢两拍的呼吸，与「选中」区分开（选中是描边，提示是底色） */
+.llk__tile.is-hint {
+  animation: llk-hint 900ms var(--ease) 2;
+}
+
+@keyframes llk-hint {
+  0%,
+  100% {
+    background: var(--paper-0);
+  }
+  50% {
+    background: var(--accent-soft);
+  }
+}
+
+/* 死局重排：牌面翻一下再换图案，不然图案是「跳」变的 */
+.llk__tile.is-flip {
+  animation: llk-flip 400ms var(--ease);
+}
+
+@keyframes llk-flip {
+  50% {
+    transform: scale(0.84);
+    opacity: 0.35;
+  }
+}
+
+/* 连线层。画在牌上面（折线本来就该压过牌），但不吃指针事件 */
+.llk__lines {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 2;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.llk__line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  /* 起笔靠 dashoffset 从「整条长度」回到 0（脚本按 getTotalLength 设的） */
+  transition:
+    stroke-dashoffset var(--llk-line) linear,
+    opacity var(--dur) var(--ease);
+}
+
+.llk__line.is-out {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .llk__tile,
+  .llk__line {
+    transition: none;
+  }
+
+  .llk__tile.is-blocked,
+  .llk__tile.is-hint,
+  .llk__tile.is-flip {
+    animation: none;
+  }
+
+  /* 不晃不呼吸，但「提示了哪两张」得照样看得出来 */
+  .llk__tile.is-hint {
+    background: var(--accent-soft);
+  }
+}

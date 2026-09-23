@@ -107,7 +107,20 @@ const ogLocale = { zh: 'zh_CN', ja: 'ja_JP', en: 'en_US' }[locale];
 
         另有两道门，任一没过就整段不生效：
           · 用户开了「减少动态效果」——与入场动画、出场幕布同一个口径；
-          · 本会话已经进过站。它是个开场，第二次就变成打扰了。
+          · 本会话里**从站内别处走到这里**（点了站内链接过来的）。它是个开场，
+            第二次就变成打扰了。
+
+        ⚠ **这道门的写法踩过一次坑（线上报告「进场动画失效」的根因）**：
+        sessionStorage 里那个标记**不能在这里写**。写在这里，语义就变成了「本标签页
+        已经加载过一次这张页面」—— 于是**按一次刷新就再也不播**，而从站内点回首页
+        也照样不播、分不出这两种情况。用户上线后在同一标签页里刷新几次看效果，
+        看到的就是「动画失效」（本地预览每次都是新开标签页，所以一直没暴露）。
+        标记改由 BaseLayout 的出场脚本**在点站内链接的当下**写下，含义回到它该有的
+        那个：逛过站内了。这里只读。
+
+        刷新另算：刷新是「再看一遍这一页」，不是「从别处走过来」，所以照常开场
+        —— 判断靠 navigation entry 的 type，不看 referrer（刷新时 referrer 会沿用
+        上一次的，分辨不出来）。
 
         sessionStorage 读不到（隐私模式、沙箱、某些 file:// 场景）就照常放一次：
         宁可多放一次，也别让第一次来的人什么都看不到。
@@ -118,10 +131,18 @@ const ogLocale = { zh: 'zh_CN', ja: 'ja_JP', en: 'en_US' }[locale];
 
           if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
+          var fromInside = false;
           try {
-            if (sessionStorage.getItem('gekka:intro')) return;
-            sessionStorage.setItem('gekka:intro', '1');
+            fromInside = sessionStorage.getItem('gekka:intro') === '1';
           } catch (err) {}
+
+          var isReload = false;
+          try {
+            var nav = performance.getEntriesByType('navigation')[0];
+            isReload = !!nav && nav.type === 'reload';
+          } catch (err) {}
+
+          if (fromInside && !isReload) return;
 
           root.dataset.intro = 'in';
 

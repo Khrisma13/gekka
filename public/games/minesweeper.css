@@ -1,0 +1,152 @@
+/* ==========================================================================
+   月華社 · 彩蛋小游戏 · 扫雷（玩法自己的样式）
+   --------------------------------------------------------------------------
+   只管棋盘与格子；外壳（遮罩、对话框、页脚、通关面板）在 shell.css 里。
+   由 shell.js 在选中这个玩法时才拉进来（见 components/EasterEgg.astro 的槽位）。
+
+   尺寸全部由脚本算出来写进行内样式（每格多大、几列、缝多宽）——
+   与连连看同一套做法：**能用当前可用宽高算出来的，绝不写媒体查询**。
+   这个文件里因此没有一处 px 尺寸落在一格上，只有与格子无关的观感（颜色、圆角、描边）。
+
+   格子只有两种视觉：**盖着**（浅底 + 发丝框）与**翻开**（纸面，什么都不剩）。
+   底色的差别本身就是「哪儿还没看过」的提示，不需要再加图标。
+   ========================================================================== */
+
+.ms {
+  position: relative;
+  display: grid;
+}
+
+.ms__cell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  /* ⚠ 高度**必须显式给**。列宽由脚本写的 grid-template-columns 定死了，行高却不会
+     自己长出来：格子里的内容只是一位数或一个小 SVG（字号的 44%），行高会退化成十几 px
+     —— 整块棋盘于是被压成一条纸带（实测舞台只剩 16px 高，等于全塌）。
+     边长只有一个真源：脚本算出来的 --ms-cell-size，宽（来自栅格轨道）高都从它来。 */
+  width: var(--ms-cell-size, 40px);
+  height: var(--ms-cell-size, 40px);
+  /* 字号跟着格子走：40px 的格子配 44% 的字，缩到 22px 也不会挤 */
+  font-size: calc(var(--ms-cell-size, 40px) * 0.44);
+  font-weight: var(--w-medium);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  /* 盖着的样子 */
+  color: var(--ink-500);
+  background: var(--paper-100);
+  border-radius: var(--r-sm);
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+
+/* 格子挨得紧，全站那条 focus 描边（3px 偏移）会压到邻居身上，收进来 */
+.ms__cell:focus-visible {
+  outline-offset: -2px;
+}
+
+.ms__cell:not(.is-open):hover {
+  background: var(--paper-200);
+}
+
+/* 翻开：底色与描边一起退掉，只剩数字 —— 「这里已经看过了」 */
+.ms__cell.is-open {
+  background: transparent;
+  color: var(--ink-700);
+}
+
+/* 数字按危险程度分三档。1-2 是「随手点」、3-5 是「得想一下」、
+   6-8 是「这格旁边几乎全是雷」—— 用色阶说话，比八个颜色一套杂牌强。
+   --danger（#8F3F3F）在令牌里一直备着没用过，这里正好是它该出现的地方。 */
+.ms__cell[data-n='1'],
+.ms__cell[data-n='2'] {
+  color: var(--ink-500);
+}
+
+.ms__cell[data-n='3'],
+.ms__cell[data-n='4'],
+.ms__cell[data-n='5'] {
+  color: var(--ink-800);
+}
+
+.ms__cell[data-n='6'],
+.ms__cell[data-n='7'],
+.ms__cell[data-n='8'] {
+  color: var(--danger);
+}
+
+/* 插旗：整局唯一常亮强调色的地方（「我已经判断过这一格了」） */
+.ms__cell.is-flag {
+  color: var(--accent);
+}
+
+/* 踩中的那一格：红底 + 晃两下。只有它用 --danger 做底 */
+.ms__cell.is-boom {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  animation: ms-shake 260ms var(--ease) 2;
+}
+
+/* 输掉时一并翻出来的雷：压得比踩中的那格轻，视线仍然落在「踩中的那一格」上 */
+.ms__cell.is-mine {
+  color: var(--ink-400);
+  background: transparent;
+}
+
+/* 插错的旗：旗本身压淡，再用一条红杠划掉 —— 用伪元素是因为旗是 SVG，
+   文字那条删除线压不到它身上 */
+.ms__cell.is-wrong {
+  color: var(--ink-300);
+}
+
+.ms__cell.is-wrong::after {
+  content: '';
+  position: absolute;
+  left: 16%;
+  right: 16%;
+  top: 50%;
+  height: 1.5px;
+  background: var(--danger);
+  transform: rotate(-24deg);
+}
+
+.ms__cell svg {
+  width: 62%;
+  height: 62%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 插旗模式下，还没翻开的格子给一个十字准星，提示「这一下是插旗不是翻开」。
+   模式本身的状态在页脚那个按钮上（aria-pressed + 常驻下划线）。 */
+.ms.is-flagmode .ms__cell:not(.is-open) {
+  cursor: crosshair;
+}
+
+@keyframes ms-shake {
+  0%,
+  100% {
+    transform: none;
+  }
+  35% {
+    transform: translateX(-2px);
+  }
+  70% {
+    transform: translateX(2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ms__cell {
+    transition: none;
+  }
+
+  .ms__cell.is-boom {
+    animation: none;
+  }
+}

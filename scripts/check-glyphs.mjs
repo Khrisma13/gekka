@@ -8,8 +8,12 @@
  *   这些字符不会报错，只会悄悄回退到系统字体，或更糟：显示成方框。
  *   社团站会长期加内容，尤其是日文文案，所以让机器每次构建都替人盯一遍。
  *
- * 扫描的是 dist 里的渲染文本（已剔除 HTML 注释、<style>、<script>），
- * 所以组件注释里的符号不会误报。
+ * 扫两处文本：
+ *   ① dist 里的渲染文本（已剔除 HTML 注释、样式表与脚本标签的内容）——
+ *      页面上看得见的字全在这儿；
+ *   ② public/games/*.js 的字符串字面量 —— 彩蛋玩法是**按需下载**的，
+ *      它的字不进任何 HTML，只盯 dist 会整块漏掉（见脚本末尾的 gameScripts）。
+ * 两处的注释都会被剔掉，所以组件与脚本注释里的符号不会误报。
  *
  * 用法：
  *   node scripts/check-glyphs.mjs          作为构建后检查，缺字只警告
@@ -76,6 +80,31 @@ async function walk(dir) {
   return out;
 }
 
+/** 按需加载的玩法脚本（public/games/*.js）。它们不进 dist 的 HTML，得回源头找 */
+async function gameScripts() {
+  const dir = path.join(ROOT, 'public', 'games');
+  try {
+    const files = await readdir(dir);
+    return files.filter((f) => f.endsWith('.js')).map((f) => path.join(dir, f));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 脚本里「会被读者看到」的字符。只取字符串字面量里的**非 ASCII**：
+ *   · 注释是写给维护者的（这个文件头顶就有一大片汉字），不能算数；
+ *   · ASCII 全是代码、类名、选择器，界面上不会出现这些形状的字。
+ * 两边都卡住，才不会一边漏掉牌面名、一边把注释里的字报成缺字。
+ */
+function scriptText(js) {
+  const out = [];
+  const re = /'([^'\\]*(?:\\.[^'\\]*)*)'|"([^"\\]*(?:\\.[^"\\]*)*)"|`([^`\\]*(?:\\.[^`\\]*)*)`/g;
+  let m;
+  while ((m = re.exec(js))) out.push(m[1] || m[2] || m[3] || '');
+  return out.join('\n').replace(/[\x00-\x7F]/g, '');
+}
+
 // ---- 主流程 --------------------------------------------------------------
 
 try {
@@ -87,14 +116,14 @@ try {
 
 const coverage = loadCoverage(await readFile(FONT_CSS, 'utf8'));
 const pages = await walk(DIST);
+const games = await gameScripts();
 
-/** 码位 → 出现在哪些页面 */
+/** 码位 → 出现在哪些文件 */
 const missing = new Map();
 let scanned = 0;
 
-for (const page of pages) {
-  const text = visibleText(await readFile(page, 'utf8'));
-  const rel = path.relative(DIST, page).replace(/\\/g, '/');
+/** 记下一段「会显示给读者的文本」里的码位 */
+function note(text, rel) {
   for (const ch of text) {
     const cp = ch.codePointAt(0);
     scanned++;
@@ -106,7 +135,19 @@ for (const page of pages) {
   }
 }
 
-console.log(`字形检查 · 扫描 ${pages.length} 个页面 / ${scanned} 个字符`);
+for (const page of pages) {
+  note(visibleText(await readFile(page, 'utf8')), path.relative(DIST, page).replace(/\\/g, '/'));
+}
+
+// 按需加载的玩法脚本（public/games/*.js）不在任何 HTML 里，但它的字一样会显示：
+// 牌面名、提示文案、通关语。面板改文案最容易漏的就是这一处，所以一并扫上。
+for (const file of games) {
+  note(scriptText(await readFile(file, 'utf8')), path.relative(ROOT, file).replace(/\\/g, '/'));
+}
+
+console.log(
+  `字形检查 · 扫描 ${pages.length} 个页面 + ${games.length} 个玩法脚本 / ${scanned} 个字符`,
+);
 console.log(`MiSans 覆盖 ${coverage.size} 个码位`);
 
 if (missing.size === 0) {

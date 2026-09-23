@@ -35,14 +35,18 @@ const typefaceLabel: Record<Locale, string> = {
     <div class="footer__top">
       <div class="footer__brand">
         <div class="footer__brand-row">
-          <img
-            class="footer__mark"
-            src={asset('/brand/logo-mark.png')}
-            alt=""
-            width="35"
-            height="32"
-            aria-hidden="true"
-          />
+          <!-- 徽记同时是彩蛋的触发点：连点三下开小游戏（判断在 components/EasterEgg.astro）。
+               包成真按钮而不是给图片挂点击 —— 键盘用户也能连按三下回车够到它；
+               视觉与从前完全一致，只是多了个装得下反馈动画的外壳。 -->
+          <button class="footer__mark" type="button" data-egg-logo aria-label="月華社社团标志">
+            <img
+              src={asset('/brand/logo-mark.png')}
+              alt=""
+              width="35"
+              height="32"
+              aria-hidden="true"
+            />
+          </button>
           <div>
             <p class="footer__name">{SITE.name}</p>
             <p class="footer__latin">{SITE.nameLatin}</p>
@@ -139,11 +143,72 @@ const typefaceLabel: Record<Locale, string> = {
     gap: var(--s-4);
   }
 
+  /* 徽记：既是社团标志，也是彩蛋的触发点（连点三下，见 EasterEgg.astro）。
+     版式上它还是那枚 32px 高的图，按钮只是外层 —— 有个能挂反馈动画的盒子，
+     也顺带把点击目标做成键盘够得着的。 */
   .footer__mark {
+    position: relative;
+    display: block;
+    flex-shrink: 0;
+    padding: 0;
+    line-height: 0;
+    border-radius: var(--r-sm);
+  }
+
+  .footer__mark img {
     display: block;
     height: 32px;
     width: auto;
-    flex-shrink: 0;
+    transition: transform var(--dur-fast) var(--ease);
+  }
+
+  /* 每一下都收一下：不写这个，连点三下会像点在空气上 */
+  .footer__mark:active img {
+    transform: scale(0.92);
+  }
+
+  /* 三下点完绽开一圈月晕，托住「资源还在路上」的那一小段。
+     动画只能写在这里：那一刻 public/games/ 下的外壳样式还没到，指望不上。 */
+  .footer__mark::after {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border: 1px solid var(--accent-line);
+    border-radius: var(--r-full);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .footer__mark.is-bloom::after {
+    animation: mark-bloom 900ms var(--ease);
+  }
+
+  @keyframes mark-bloom {
+    0% {
+      opacity: 0;
+      transform: scale(0.78);
+    }
+    30% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1.45);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .footer__mark img {
+      transition: none;
+    }
+
+    .footer__mark:active img {
+      transform: none;
+    }
+
+    .footer__mark.is-bloom::after {
+      animation: none;
+    }
   }
 
   .footer__name {
